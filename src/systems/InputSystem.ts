@@ -86,6 +86,11 @@ export class InputSystem {
         left: this.arrows.LEFT.isDown,
         right: this.arrows.RIGHT.isDown,
       });
+      const pointer = scene.input.activePointer;
+      const world = scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      player2.setAimAngle(
+        Phaser.Math.Angle.Between(player2.x, player2.y, world.x, world.y),
+      );
     }
   }
 

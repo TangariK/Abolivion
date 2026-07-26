@@ -22,11 +22,10 @@ Você controla um pequeno índio em uma tribo abandonada. Toda noite, centenas d
 | **Mouse** | Mira (1P) |
 | **Esc** | Pausar / continuar |
 | **2P — P1** | WASD move · IJKL mira |
-| **2P — P2** | Setas move · mira automática |
+| **2P — P2** | Setas move · Mouse mira |
 
 ### Loop
 
-1. Ande pelo mapa e elimine inimigos (eles te perseguem).
 1. Escolha o **modo** (Infinito ou Rodadas; História em breve).
 2. Ande pelo mapa e elimine inimigos (eles te perseguem).
 3. Colete orbs de **XP** → suba de nível → escolha **1 de 3 upgrades**.

@@ -160,7 +160,7 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     const body = this.add
-      .text(0, 12, 'P1: WASD move · IJKL mira\nP2: Setas para mover (mira automática)', {
+      .text(0, 12, 'P1: WASD move · IJKL mira\nP2: Setas move · Mouse mira', {
         fontFamily: 'Segoe UI, Tahoma, sans-serif',
         fontSize: '14px',
         color: '#e8f0e8',

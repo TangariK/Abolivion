@@ -184,7 +184,7 @@ export class GameScene extends Phaser.Scene {
         this,
         partner,
         this.projectiles,
-        () => WeaponSystem.aimAtNearest(partner, this.enemies),
+        () => partner.aimAngle,
       );
       this.weapon2.start();
     }
