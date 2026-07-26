@@ -183,6 +183,7 @@ export interface Profile {
   };
   prefs?: {
     showNameTag: boolean;
+    acceptNewsletter?: boolean;
   };
 }
 

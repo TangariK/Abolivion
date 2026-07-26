@@ -1,5 +1,9 @@
 import type { Profile } from '../data/types';
-import { SaveManager } from '../upgrades/MetaUpgrades';
+import {
+  hasProfileProgress,
+  profileProgressScore,
+  SaveManager,
+} from '../upgrades/MetaUpgrades';
 import { AdminService } from './AdminService';
 import { getSupabase, isSupabaseConfigured } from './supabaseClient';
 
@@ -17,6 +21,7 @@ export interface CloudProfileRow {
   best_scores: NonNullable<Profile['bestScores']>;
   profile_version: number;
   updated_at: string;
+  created_at?: string;
 }
 
 function emptyBestScores(): NonNullable<Profile['bestScores']> {
@@ -65,8 +70,11 @@ export function mergeProfiles(local: Profile, cloud: Partial<Profile>): Profile 
       lowestHpSurvive: mergeLowestHp(localBest.lowestHpSurvive, cloudBest.lowestHpSurvive),
       bestAccuracy: Math.max(localBest.bestAccuracy ?? 0, cloudBest.bestAccuracy ?? 0),
     },
-    // Account-level preference: cloud wins on login
-    prefs: cloud.prefs ?? local.prefs ?? { showNameTag: false },
+    // Preferências da conta: nuvem manda
+    prefs: {
+      showNameTag: cloud.prefs?.showNameTag ?? local.prefs?.showNameTag ?? false,
+      acceptNewsletter: cloud.prefs?.acceptNewsletter ?? local.prefs?.acceptNewsletter ?? false,
+    },
   };
 }
 
@@ -113,6 +121,7 @@ export function rowToProfile(row: CloudProfileRow): Profile {
     },
     prefs: {
       showNameTag: row.show_name_tag ?? false,
+      acceptNewsletter: row.accept_newsletter ?? false,
     },
   };
 }
@@ -120,8 +129,19 @@ export function rowToProfile(row: CloudProfileRow): Profile {
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let syncing = false;
 
+/**
+ * Ao logar:
+ * - Convidado e conta usam slots locais separados (não misturam).
+ * - Conta existente na nuvem: NÃO importa o save de convidado deste browser.
+ * - Slot local da própria conta pode mesclar com a nuvem (continuidade no mesmo device).
+ * - Conta nova / nuvem vazia: importa convidado só se o slot da conta ainda estiver vazio
+ *   e o convidado tiver progresso (cadastro neste aparelho).
+ * - Recuperação: se o legado compartilhado (v1) for claramente mais rico que a nuvem
+ *   e o slot da conta estiver vazio, usa o legado uma vez (corrige merge antigo).
+ */
 export async function pullAndMergeCloudProfile(userId: string): Promise<Profile> {
   const supabase = getSupabase();
+  SaveManager.bindUser(userId);
   if (!supabase) return SaveManager.load();
 
   const { data, error } = await supabase
@@ -132,16 +152,51 @@ export async function pullAndMergeCloudProfile(userId: string): Promise<Profile>
 
   if (error) throw error;
 
-  const local = SaveManager.load();
+  const accountLocal = SaveManager.loadUser(userId);
+  const guest = SaveManager.loadGuest();
+  const legacyShared = guest; // mesma chave v1 pré-separação
+
   if (!data) {
-    await pushCloudProfile(userId, local);
-    return local;
+    const seed = hasProfileProgress(accountLocal)
+      ? accountLocal
+      : hasProfileProgress(guest)
+        ? guest
+        : SaveManager.load();
+    SaveManager.save(seed, { skipCloud: true });
+    await pushCloudProfile(userId, seed);
+    return seed;
   }
 
   const row = data as CloudProfileRow;
   AdminService.setRole(row.role);
+  const cloud = rowToProfile(row);
+  const cloudHasProgress = hasProfileProgress(cloud);
 
-  const merged = mergeProfiles(local, rowToProfile(row));
+  let accountSeed = accountLocal;
+  if (!hasProfileProgress(accountSeed) && hasProfileProgress(legacyShared)) {
+    // Só adota o legado compartilhado se for claramente a “fonte boa”
+    // (ex.: progresso local rico vs nuvem contaminada/zerada no Legado).
+    if (!cloudHasProgress || profileProgressScore(legacyShared) > profileProgressScore(cloud) * 1.25) {
+      accountSeed = legacyShared;
+    }
+  }
+
+  let merged: Profile;
+  if (!cloudHasProgress) {
+    merged = hasProfileProgress(accountSeed) ? accountSeed : cloud;
+  } else if (!hasProfileProgress(accountSeed)) {
+    // Conta na nuvem existe: convidado deste browser NÃO entra.
+    merged = cloud;
+  } else {
+    merged = mergeProfiles(accountSeed, cloud);
+  }
+
+  // Prefs da conta sempre da nuvem
+  merged.prefs = {
+    showNameTag: cloud.prefs?.showNameTag ?? false,
+    acceptNewsletter: cloud.prefs?.acceptNewsletter ?? false,
+  };
+
   SaveManager.save(merged, { skipCloud: true });
   await pushCloudProfile(userId, merged);
   return merged;
@@ -158,6 +213,7 @@ export async function pushCloudProfile(userId: string, profile: Profile): Promis
     almanac: profile.almanac,
     best_scores: profile.bestScores ?? emptyBestScores(),
     show_name_tag: profile.prefs?.showNameTag ?? false,
+    accept_newsletter: profile.prefs?.acceptNewsletter ?? false,
     profile_version: profile.version,
   };
 
@@ -195,6 +251,7 @@ export async function flushCloudSync(userId: string): Promise<void> {
   if (syncing) return;
   syncing = true;
   try {
+    SaveManager.bindUser(userId);
     await pushCloudProfile(userId, SaveManager.load());
   } catch (err) {
     console.warn('[Abolivion] cloud sync failed', err);

@@ -266,14 +266,14 @@ export class FreeModeSetupOverlay {
         errorMsg.textContent = config;
         return;
       }
-      this.close();
-      onStart(config);
+      const start = onStart;
+      this.closeDelayed(() => start(config));
     };
 
     const cancelBtn = this.button('Cancelar', 'transparent', MUTED, true);
     cancelBtn.onclick = () => {
-      this.close();
-      onCancel();
+      const cancel = onCancel;
+      this.closeDelayed(() => cancel());
     };
 
     actions.append(startBtn, cancelBtn);
@@ -286,6 +286,15 @@ export class FreeModeSetupOverlay {
   close(): void {
     this.root?.remove();
     this.root = undefined;
+  }
+
+  private closeDelayed(after: () => void): void {
+    const root = this.root;
+    this.root = undefined;
+    window.setTimeout(() => {
+      root?.remove();
+      after();
+    }, 80);
   }
 
   private buildConfig(args: {

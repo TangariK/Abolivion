@@ -142,6 +142,7 @@ export class MenuScene extends Phaser.Scene {
     bg.on('pointerover', () => bg.setFillStyle(0x3b3220));
     bg.on('pointerout', () => bg.setFillStyle(0x2a2417));
     bg.on('pointerup', () => {
+      this.lockUiInput();
       this.profileOverlay.open((result) => {
         this.profile = SaveManager.load();
         this.refreshCoins();
@@ -149,6 +150,7 @@ export class MenuScene extends Phaser.Scene {
         if (result.unlockedLoginAchievement) {
           this.toasts.enqueue('tribe_member');
         }
+        this.unlockUiInputSoon();
       });
     });
 
@@ -437,17 +439,32 @@ export class MenuScene extends Phaser.Scene {
     btn.on('pointerout', () => btn.setFillStyle(COLORS.accent));
     btn.on('pointerdown', () => {
       if (GameSettingsStore.getMode() === 'free') {
+        this.lockUiInput();
         this.freeSetup.open(
           SaveManager.load(),
           (config) => {
+            this.unlockUiInputSoon();
             GameSettingsStore.setFreeConfig(config);
             this.scene.start('GameScene');
           },
-          () => {},
+          () => {
+            this.unlockUiInputSoon();
+          },
         );
         return;
       }
       this.scene.start('GameScene');
+    });
+  }
+
+  /** Impede o clique do overlay HTML de “furar” para Marã / Começar no canvas. */
+  private lockUiInput(): void {
+    this.input.enabled = false;
+  }
+
+  private unlockUiInputSoon(): void {
+    this.time.delayedCall(320, () => {
+      this.input.enabled = true;
     });
   }
 

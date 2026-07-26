@@ -10,10 +10,15 @@ import type {
 import { ENEMY_DEFS } from '../data/EnemyCatalog';
 import { GameSettingsStore } from '../data/GameModeStore';
 
-const SAVE_KEY = 'abolivion_profile_v1';
+/** Slot do convidado (e legado pré-0.1.4.1, chave compartilhada). */
+const GUEST_KEY = 'abolivion_profile_v1';
 const PROFILE_VERSION = 4;
 
 export type SaveOptions = { skipCloud?: boolean };
+
+function userKey(userId: string): string {
+  return `abolivion_profile_user_${userId}`;
+}
 
 function emptyAlmanac(): Profile['almanac'] {
   return {
@@ -52,7 +57,7 @@ function defaultProfile(): Profile {
     },
     almanac: emptyAlmanac(),
     bestScores: emptyBestScores(),
-    prefs: { showNameTag: false },
+    prefs: { showNameTag: false, acceptNewsletter: false },
   };
 }
 
@@ -89,29 +94,105 @@ function normalizeProfile(parsed: Partial<Profile>): Profile {
     },
     prefs: {
       showNameTag: parsed.prefs?.showNameTag ?? false,
+      acceptNewsletter: parsed.prefs?.acceptNewsletter ?? false,
     },
   };
 }
 
+function readKey(key: string): Profile {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return defaultProfile();
+    const parsed = JSON.parse(raw) as Partial<Profile>;
+    if (!parsed || typeof parsed !== 'object') return defaultProfile();
+    return normalizeProfile(parsed);
+  } catch {
+    return defaultProfile();
+  }
+}
+
+function writeKey(key: string, profile: Profile): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(profile));
+  } catch {
+    // private mode / quota
+  }
+}
+
+export function hasProfileProgress(profile: Profile): boolean {
+  const best = profile.bestScores;
+  return (
+    profile.currency > 0
+    || Object.values(profile.metaLevels).some((v) => v > 0)
+    || profile.almanac.enemies.length > 0
+    || profile.almanac.amulets.length > 0
+    || profile.almanac.upgrades.length > 0
+    || profile.almanac.bosses.length > 0
+    || profile.almanac.achievements.length > 0
+    || (best?.kills ?? 0) > 0
+    || (best?.infiniteMs ?? 0) > 0
+    || (best?.wavesReached ?? 0) > 0
+    || (best?.totalPlayMs ?? 0) > 0
+    || (best?.bestLevel ?? 1) > 1
+  );
+}
+
+/** Heurística para preferir o save mais “cheio” na recuperação pós-bug de merge. */
+export function profileProgressScore(profile: Profile): number {
+  const best = profile.bestScores ?? emptyBestScores();
+  const metaSum = Object.values(profile.metaLevels).reduce((a, b) => a + b, 0);
+  return (
+    (best.totalPlayMs ?? 0)
+    + (best.infiniteMs ?? 0)
+    + (best.kills ?? 0) * 50
+    + (best.wavesReached ?? 0) * 200
+    + (best.bestLevel ?? 1) * 100
+    + (best.bestKillStreak ?? 0) * 10
+    + (best.totalCoinsEarned ?? 0)
+    + profile.currency * 5
+    + metaSum * 80
+    + profile.almanac.achievements.length * 120
+    + profile.almanac.bosses.length * 400
+    + profile.almanac.enemies.length * 30
+  );
+}
+
 export class SaveManager {
+  /** null = convidado (GUEST_KEY). */
+  private static activeUserId: string | null = null;
+
+  static getActiveUserId(): string | null {
+    return this.activeUserId;
+  }
+
+  private static activeKey(): string {
+    return this.activeUserId ? userKey(this.activeUserId) : GUEST_KEY;
+  }
+
+  /** Troca o slot ativo para a conta (não apaga o save de convidado). */
+  static bindUser(userId: string): void {
+    this.activeUserId = userId;
+  }
+
+  /** Volta ao slot de convidado. */
+  static bindGuest(): void {
+    this.activeUserId = null;
+  }
+
+  static loadGuest(): Profile {
+    return readKey(GUEST_KEY);
+  }
+
+  static loadUser(userId: string): Profile {
+    return readKey(userKey(userId));
+  }
+
   static load(): Profile {
-    try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (!raw) return defaultProfile();
-      const parsed = JSON.parse(raw) as Partial<Profile>;
-      if (!parsed || typeof parsed !== 'object') return defaultProfile();
-      return normalizeProfile(parsed);
-    } catch {
-      return defaultProfile();
-    }
+    return readKey(this.activeKey());
   }
 
   static save(profile: Profile, options: SaveOptions = {}): void {
-    try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify(profile));
-    } catch {
-      // private mode / quota
-    }
+    writeKey(this.activeKey(), profile);
     if (!options.skipCloud) {
       void import('../services/AuthService').then(({ AuthService }) => {
         if (!AuthService.isLoggedIn()) return;
@@ -217,7 +298,7 @@ export class SaveManager {
   static resetProgress(): Profile {
     const prefs = this.load().prefs;
     const fresh = defaultProfile();
-    fresh.prefs = prefs ?? { showNameTag: false };
+    fresh.prefs = prefs ?? { showNameTag: false, acceptNewsletter: false };
     this.save(fresh);
     return fresh;
   }

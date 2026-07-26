@@ -36,6 +36,12 @@ _Mudanças em desenvolvimento, ainda sem número de versão._
 - Conquista Nome na Tribo ao autenticar
 - Timer de sobrevivência formatado (`45s` / `1m 5s` / `1h 2m 3s`) e scroll com máscara no Marã
 
+### Corrigido
+
+- Sync de conta: o cache de **convidado** do navegador não é mais misturado na conta ao logar
+  (evita Marã/legado de outro save local sobrescrever a nuvem). Saves de convidado e de conta
+  ficam em slots separados no `localStorage`.
+
 ### Detalhamento
 
 Ver [`docs/versions/0.1.4.md`](docs/versions/0.1.4.md).

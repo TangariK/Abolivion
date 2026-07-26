@@ -72,8 +72,7 @@ class AuthServiceImpl {
   }
 
   acceptsNewsletter(): boolean {
-    const meta = this.user?.user_metadata as { accept_newsletter?: boolean } | undefined;
-    return Boolean(meta?.accept_newsletter);
+    return Boolean(SaveManager.load().prefs?.acceptNewsletter);
   }
 
   onChange(listener: AuthListener): () => void {
@@ -111,6 +110,7 @@ class AuthServiceImpl {
     if (!next) {
       AdminService.setRole('player');
       this.emailFlagsSyncedFor = null;
+      SaveManager.bindGuest();
     }
     if (changed && next) {
       try {
@@ -275,6 +275,9 @@ class AuthServiceImpl {
     });
     if (error) throw error;
     if (data.user) this.user = data.user;
+    const profile = SaveManager.load();
+    profile.prefs = { ...profile.prefs, showNameTag: profile.prefs?.showNameTag ?? false, acceptNewsletter: accept };
+    SaveManager.save(profile, { skipCloud: true });
     await pushProfileFlags(this.user.id, { accept_newsletter: accept });
     this.emit();
   }
@@ -345,8 +348,12 @@ class AuthServiceImpl {
     if (!AdminService.isAdminCandidate()) {
       throw new Error('Apenas a conta de dev pode resetar o progresso.');
     }
-    SaveManager.resetProgress();
-    if (this.user) await flushCloudSync(this.user.id);
+    const cleared = SaveManager.resetProgress();
+    if (this.user) {
+      // Push explícito do perfil zerado (não só o debounce do save).
+      const { pushCloudProfile } = await import('./CloudSync');
+      await pushCloudProfile(this.user.id, cleared);
+    }
   }
 
   async signOut(): Promise<void> {
@@ -357,6 +364,7 @@ class AuthServiceImpl {
     if (error) throw error;
     this.user = null;
     AdminService.setRole('player');
+    SaveManager.bindGuest();
     this.emit();
   }
 

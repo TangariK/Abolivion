@@ -1,7 +1,7 @@
 import { AdminService } from '../services/AdminService';
 import { AuthService } from '../services/AuthService';
 import { isSupabaseConfigured } from '../services/supabaseClient';
-import { SaveManager } from '../upgrades/MetaUpgrades';
+import { hasProfileProgress, SaveManager } from '../upgrades/MetaUpgrades';
 import { ptAuthError } from '../utils/authErrors';
 import { formatDuration } from '../utils/formatDuration';
 import { isGuestEmail, normalizeUsername } from '../utils/username';
@@ -75,8 +75,16 @@ export class ProfileOverlay {
   private finish(unlockedLoginAchievement: boolean): void {
     const onClose = this.onCloseCb;
     const unlocked = unlockedLoginAchievement || this.pendingUnlock;
-    this.close();
-    onClose?.({ loggedIn: AuthService.isLoggedIn(), unlockedLoginAchievement: unlocked });
+    const root = this.root;
+    this.root = undefined;
+    this.panel = undefined;
+    this.onCloseCb = undefined;
+    // Remove no próximo tick para o clique atual não “furar” o canvas do Phaser
+    // (Marã / Começar logo atrás do botão Fechar / Sair).
+    window.setTimeout(() => {
+      root?.remove();
+      onClose?.({ loggedIn: AuthService.isLoggedIn(), unlockedLoginAchievement: unlocked });
+    }, 80);
   }
 
   /** Redesenha o painel (usado quando o estado da conta muda sem fechar o overlay). */
@@ -91,6 +99,129 @@ export class ProfileOverlay {
       this.buildGuestView(panel, finish, info);
     }
     panel.scrollTop = 0;
+  }
+
+  /**
+   * Aviso estilizado antes de login/cadastro quando há progresso de convidado.
+   * Resolve true = continuar, false = cancelar.
+   */
+  private confirmGuestProgressLoss(kind: 'login' | 'register'): Promise<boolean> {
+    if (!hasProfileProgress(SaveManager.loadGuest())) return Promise.resolve(true);
+
+    const title = kind === 'register' ? 'Progresso de convidado' : 'Entrar na conta';
+    const body =
+      kind === 'register'
+        ? 'Você tem progresso como convidado neste aparelho. Ao criar a conta, esse progresso pode ser levado para a conta nova. Se preferir começar do zero, cancele agora.'
+        : 'Você tem progresso como convidado neste aparelho. Ao entrar, o jogo carrega o progresso da conta (nuvem). O progresso de convidado não é transferido — fica guardado neste aparelho e volta se você sair da conta.';
+    const confirmLabel = kind === 'register' ? 'Continuar cadastro' : 'Entrar mesmo assim';
+
+    return this.showConfirmDialog({ title, body, confirmLabel, cancelLabel: 'Cancelar' });
+  }
+
+  private showConfirmDialog(opts: {
+    title: string;
+    body: string;
+    confirmLabel: string;
+    cancelLabel: string;
+  }): Promise<boolean> {
+    return new Promise((resolve) => {
+      const host = this.root;
+      if (!host) {
+        resolve(false);
+        return;
+      }
+
+      const veil = document.createElement('div');
+      Object.assign(veil.style, {
+        position: 'absolute',
+        inset: '0',
+        zIndex: '20',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        background: 'rgba(5, 12, 8, 0.72)',
+        backdropFilter: 'blur(2px)',
+      } as CSSStyleDeclaration);
+
+      const card = document.createElement('div');
+      Object.assign(card.style, {
+        width: 'min(360px, 100%)',
+        background: 'linear-gradient(160deg, #1f2e22 0%, #151c16 100%)',
+        border: `1px solid ${ACCENT}`,
+        borderRadius: '10px',
+        padding: '20px 20px 16px',
+        boxShadow: '0 16px 40px rgba(0,0,0,0.5)',
+        color: TEXT,
+      } as CSSStyleDeclaration);
+
+      const eyebrow = document.createElement('div');
+      eyebrow.textContent = 'Aviso';
+      Object.assign(eyebrow.style, {
+        fontSize: '11px',
+        letterSpacing: '0.22em',
+        textTransform: 'uppercase',
+        color: MUTED,
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        marginBottom: '8px',
+      } as CSSStyleDeclaration);
+
+      const title = document.createElement('div');
+      title.textContent = opts.title;
+      Object.assign(title.style, {
+        fontFamily: 'Georgia, Times New Roman, serif',
+        fontSize: '20px',
+        color: '#f4d77b',
+        marginBottom: '10px',
+        lineHeight: '1.25',
+      } as CSSStyleDeclaration);
+
+      const rule = document.createElement('div');
+      Object.assign(rule.style, {
+        width: '48px',
+        height: '2px',
+        background: ACCENT,
+        marginBottom: '12px',
+      } as CSSStyleDeclaration);
+
+      const body = document.createElement('p');
+      body.textContent = opts.body;
+      Object.assign(body.style, {
+        margin: '0',
+        fontSize: '14px',
+        lineHeight: '1.55',
+        color: MUTED,
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+      } as CSSStyleDeclaration);
+
+      const actions = document.createElement('div');
+      Object.assign(actions.style, {
+        display: 'flex',
+        gap: '8px',
+        marginTop: '18px',
+        flexWrap: 'wrap',
+      } as CSSStyleDeclaration);
+
+      const cancelBtn = this.button(opts.cancelLabel, 'transparent', MUTED, true);
+      const confirmBtn = this.button(opts.confirmLabel, ACCENT, '#0d1a12');
+
+      const finish = (ok: boolean) => {
+        veil.remove();
+        resolve(ok);
+      };
+
+      cancelBtn.onclick = () => finish(false);
+      confirmBtn.onclick = () => finish(true);
+      veil.addEventListener('click', (ev) => {
+        if (ev.target === veil) finish(false);
+      });
+
+      actions.append(cancelBtn, confirmBtn);
+      card.append(eyebrow, title, rule, body, actions);
+      veil.append(card);
+      host.append(veil);
+      confirmBtn.focus();
+    });
   }
 
   // ————— Convidado: entrar / cadastrar —————
@@ -241,6 +372,7 @@ export class ProfileOverlay {
     loginBtn.onclick = async () => {
       error.textContent = '';
       okMsg.textContent = '';
+      if (!(await this.confirmGuestProgressLoss('login'))) return;
       busy(true);
       try {
         const had = SaveManager.hasAchievement('tribe_member');
@@ -263,6 +395,7 @@ export class ProfileOverlay {
         error.textContent = 'A senha deve ter pelo menos 6 caracteres.';
         return;
       }
+      if (!(await this.confirmGuestProgressLoss('register'))) return;
       busy(true);
       try {
         const had = SaveManager.hasAchievement('tribe_member');
@@ -505,7 +638,7 @@ export class ProfileOverlay {
 
     if (realEmail || pendingEmail) {
       const newsCheck = this.checkbox('Receber novidades do jogo por e-mail');
-      newsCheck.input.checked = AuthService.acceptsNewsletter();
+      newsCheck.input.checked = profile.prefs?.acceptNewsletter ?? AuthService.acceptsNewsletter();
       newsCheck.input.addEventListener('change', () => {
         void AuthService.setAcceptNewsletter(newsCheck.input.checked)
           .then(() =>
