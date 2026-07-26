@@ -4,9 +4,7 @@ import { spawnSync } from 'node:child_process';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
-const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as {
-  version: string;
-};
+const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
 const zipName = `abolivion-v${pkg.version}-gamejolt.zip`;
 const zipPath = resolve(root, zipName);
 
