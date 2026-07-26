@@ -14,6 +14,7 @@ export class WaveSystem {
   phase: WavePhase = 'idle';
   intermissionMs = 0;
   activeBossId?: BossId;
+  private combatStartedAt = 0;
 
   private scene: Phaser.Scene;
   private player: Player;
@@ -64,7 +65,12 @@ export class WaveSystem {
 
     // Sync remaining with live actives (boss summons can increase count)
     this.remaining = children.filter((e) => e.active).length;
-    if (this.remaining <= 0 && this.totalInWave > 0) {
+    // Ignore the first ~250ms so a failed/slow spawn doesn't instantly clear the wave
+    if (
+      this.remaining <= 0
+      && this.totalInWave > 0
+      && this.scene.time.now - this.combatStartedAt > 250
+    ) {
       const cleared = this.wave;
       this.phase = 'break';
       this.intermissionMs = 5000;
@@ -90,6 +96,7 @@ export class WaveSystem {
     this.wave += 1;
     this.phase = 'combat';
     this.activeBossId = undefined;
+    this.combatStartedAt = this.scene.time.now;
 
     if (this.wave === 10) {
       this.spawnBoss('kurupi_brood');
@@ -101,11 +108,12 @@ export class WaveSystem {
     }
 
     const count = Math.min(8 + this.wave * 3, 48);
-    this.totalInWave = count;
-    this.remaining = count;
+    let spawned = 0;
     for (let i = 0; i < count; i++) {
-      this.spawnOne();
+      if (this.spawnOne()) spawned += 1;
     }
+    this.totalInWave = Math.max(spawned, 1);
+    this.remaining = spawned;
   }
 
   private spawnBoss(id: BossId): void {
@@ -113,21 +121,27 @@ export class WaveSystem {
     this.activeBossId = id;
     this.totalInWave = 1;
     this.remaining = 1;
+    this.combatStartedAt = this.scene.time.now;
     this.onBossSpawn(id);
 
     const pos = this.spawnPositionOutsideCamera();
     const enemy = this.enemies.get() as Enemy | null;
-    if (!enemy) return;
+    if (!enemy) {
+      this.totalInWave = 0;
+      this.remaining = 0;
+      return;
+    }
     enemy.spawnBoss(pos.x, pos.y, def);
   }
 
-  private spawnOne(): void {
+  private spawnOne(): boolean {
     const type = this.pickType();
     const pos = this.spawnPositionOutsideCamera();
     const enemy = this.enemies.get() as Enemy | null;
-    if (!enemy) return;
+    if (!enemy) return false;
     enemy.spawn(pos.x, pos.y, type);
     this.onEncounter(type);
+    return true;
   }
 
   private pickType(): EnemyType {

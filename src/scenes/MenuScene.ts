@@ -15,8 +15,11 @@ export class MenuScene extends Phaser.Scene {
   private profile!: Profile;
   private coinsText!: Phaser.GameObjects.Text;
   private shopContainer!: Phaser.GameObjects.Container;
+  private modeButton!: Phaser.GameObjects.Rectangle;
   private modeButtonLabel!: Phaser.GameObjects.Text;
   private dropdown?: Phaser.GameObjects.Container;
+  private dropdownBlocker?: Phaser.GameObjects.Rectangle;
+  private closingDropdown = false;
 
   constructor() {
     super('MenuScene');
@@ -79,7 +82,7 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    const button = this.add
+    this.modeButton = this.add
       .rectangle(x, y, 280, 42, 0x2a2417)
       .setStrokeStyle(2, COLORS.accent)
       .setInteractive({ useHandCursor: true })
@@ -94,21 +97,46 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(21);
 
-    button.on('pointerdown', () => this.toggleDropdown(x, y));
+    this.modeButton.on('pointerup', () => {
+      if (this.closingDropdown) return;
+      this.toggleDropdown(x, y);
+    });
+  }
+
+  private closeDropdown(): void {
+    if (!this.dropdown && !this.dropdownBlocker) return;
+    this.closingDropdown = true;
+    const dropdown = this.dropdown;
+    const blocker = this.dropdownBlocker;
+    this.dropdown = undefined;
+    this.dropdownBlocker = undefined;
+
+    // Destroy after the current input event finishes — sync destroy freezes Phaser.
+    this.time.delayedCall(0, () => {
+      dropdown?.destroy(true);
+      blocker?.destroy();
+      this.closingDropdown = false;
+    });
   }
 
   private toggleDropdown(x: number, y: number): void {
     if (this.dropdown) {
-      this.dropdown.destroy(true);
-      this.dropdown = undefined;
+      this.closeDropdown();
       return;
     }
 
-    // Open upward so it doesn't overlap Começar / Marã
-    this.dropdown = this.add.container(x, y - 24).setDepth(60);
+    this.dropdownBlocker = this.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.001)
+      .setInteractive()
+      .setDepth(55);
+    this.dropdownBlocker.on('pointerup', () => this.closeDropdown());
+
+    // Open upward, clear of Começar / Marã
+    this.dropdown = this.add.container(x, y - 28).setDepth(60);
     const panel = this.add
-      .rectangle(0, -66, 280, 132, 0x141c16, 0.98)
-      .setStrokeStyle(2, COLORS.accent);
+      .rectangle(0, -70, 280, 140, 0x141c16, 0.98)
+      .setStrokeStyle(2, COLORS.accent)
+      .setInteractive();
     this.dropdown.add(panel);
 
     const options: Array<{ id: GameModeId; locked?: boolean }> = [
@@ -118,7 +146,7 @@ export class MenuScene extends Phaser.Scene {
     ];
 
     options.forEach((opt, i) => {
-      const oy = -110 + i * 44;
+      const oy = -116 + i * 44;
       const selected = !opt.locked && GameModeStore.get() === opt.id;
       const bg = this.add
         .rectangle(0, oy, 260, 38, selected ? 0x3b3220 : 0x1a2a1e)
@@ -133,13 +161,16 @@ export class MenuScene extends Phaser.Scene {
         .setOrigin(0.5);
 
       if (!opt.locked) {
-        bg.on('pointerover', () => bg.setFillStyle(0x243528));
-        bg.on('pointerout', () => bg.setFillStyle(selected ? 0x3b3220 : 0x1a2a1e));
-        bg.on('pointerdown', () => {
+        bg.on('pointerover', () => {
+          if (bg.active) bg.setFillStyle(0x243528);
+        });
+        bg.on('pointerout', () => {
+          if (bg.active) bg.setFillStyle(selected ? 0x3b3220 : 0x1a2a1e);
+        });
+        bg.on('pointerup', () => {
           GameModeStore.set(opt.id);
           this.modeButtonLabel.setText(`${MODE_LABELS[opt.id]}  ▾`);
-          this.dropdown?.destroy(true);
-          this.dropdown = undefined;
+          this.closeDropdown();
         });
       }
 

@@ -128,7 +128,8 @@ export class GameScene extends Phaser.Scene {
         },
       });
       this.enemies = this.waves.enemies;
-      this.waves.start();
+      // Start after create finishes so the first spawn doesn't hitch input/HUD setup
+      this.time.delayedCall(0, () => this.waves?.start());
     } else {
       this.spawner = new SpawnSystem(this, this.player, (type) => {
         SaveManager.discoverEnemy(type);
