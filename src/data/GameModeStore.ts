@@ -1,9 +1,26 @@
-import type { GameModeId } from '../data/types';
+import type { FreeModeConfig, GameModeId } from '../data/types';
 
 export type PlayerCount = 1 | 2;
 
 let selectedMode: GameModeId = 'infinite';
 let playerCount: PlayerCount = 1;
+
+function defaultFreeConfig(): FreeModeConfig {
+  return {
+    baseKind: 'wave',
+    wave: 1,
+    startTimeMs: 0,
+    startLevel: 1,
+    buffCounts: {},
+    amulets: [],
+    useMeta: true,
+    metaLevels: { maxHp: 0, speed: 0, damage: 0, fireRate: 0 },
+    customEnemies: {},
+    customBosses: [],
+  };
+}
+
+let freeConfig: FreeModeConfig = defaultFreeConfig();
 
 export const GameSettingsStore = {
   getMode(): GameModeId {
@@ -18,6 +35,12 @@ export const GameSettingsStore = {
   },
   setPlayerCount(count: PlayerCount): void {
     playerCount = count;
+  },
+  getFreeConfig(): FreeModeConfig {
+    return freeConfig;
+  },
+  setFreeConfig(config: FreeModeConfig): void {
+    freeConfig = config;
   },
 };
 

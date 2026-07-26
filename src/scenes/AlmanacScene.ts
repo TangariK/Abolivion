@@ -1,7 +1,12 @@
 import Phaser from 'phaser';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config/GameConfig';
-import { ACHIEVEMENTS } from '../data/Achievements';
+import {
+  ACHIEVEMENTS,
+  achievementTierLabel,
+  isAchievementVisibleWhenLocked,
+} from '../data/Achievements';
 import { BOSS_DEFS, ENEMY_DEFS } from '../data/EnemyCatalog';
+import type { AchievementTier } from '../data/types';
 import { AMULETS, moonLabel } from '../upgrades/Amulets';
 import { SaveManager } from '../upgrades/MetaUpgrades';
 import { RUN_UPGRADES } from '../upgrades/RunUpgrades';
@@ -18,11 +23,31 @@ interface AlmanacEntry {
   unlocked: boolean;
   symbol?: string;
   rarityLabel?: string;
+  tier?: AchievementTier;
+  revealLocked?: boolean;
 }
+
+const TIER_STROKE: Record<AchievementTier, number> = {
+  normal: 0x8c7950,
+  secret: 0x6a5f48,
+  tribal: 0x3d9a78,
+  ancestral: 0xc4a035,
+};
+
+/** Viewport da lista (clipping + scroll). */
+const LIST_X = 50;
+const LIST_W = 520;
+const LIST_TOP = 188;
+const LIST_BOTTOM = 640;
+const LIST_H = LIST_BOTTOM - LIST_TOP;
+const ROW_H = 48;
+const ROW_GAP = 6;
+const ROW_STEP = ROW_H + ROW_GAP;
 
 export class AlmanacScene extends Phaser.Scene {
   private listContainer!: Phaser.GameObjects.Container;
   private detailContainer!: Phaser.GameObjects.Container;
+  private listMaskGfx?: Phaser.GameObjects.Graphics;
   private tabButtons = new Map<AlmanacTab, {
     bg: Phaser.GameObjects.Rectangle;
     label: Phaser.GameObjects.Text;
@@ -30,6 +55,14 @@ export class AlmanacScene extends Phaser.Scene {
   private rowHighlights = new Map<string, Phaser.GameObjects.Rectangle>();
   private activeTab: AlmanacTab = 'amulets';
   private selectedEntryId?: string;
+  private listScrollY = 0;
+  private listContentH = 0;
+  private onWheel?: (
+    pointer: Phaser.Input.Pointer,
+    currentlyOver: Phaser.GameObjects.GameObject[],
+    dx: number,
+    dy: number,
+  ) => void;
 
   constructor() {
     super('AlmanacScene');
@@ -83,13 +116,51 @@ export class AlmanacScene extends Phaser.Scene {
     ];
     tabs.forEach((tab) => this.makeTab(tab.x, tab.label, tab.id));
 
-    this.listContainer = this.add.container(0, 0);
+    // Moldura sutil da área scrollável (lista)
+    this.add
+      .rectangle(LIST_X + LIST_W / 2, LIST_TOP + LIST_H / 2, LIST_W + 8, LIST_H + 8, 0x1a1610, 0.35)
+      .setStrokeStyle(1, 0x8c7950);
+
+    this.listContainer = this.add.container(0, LIST_TOP);
     this.detailContainer = this.add.container(0, 0);
+
+    // Geometry mask: itens somem no topo e no fundo do viewport
+    this.listMaskGfx = this.make.graphics({ x: 0, y: 0 });
+    this.listMaskGfx.fillStyle(0xffffff, 1);
+    this.listMaskGfx.fillRect(LIST_X, LIST_TOP, LIST_W, LIST_H);
+    this.listContainer.setMask(this.listMaskGfx.createGeometryMask());
+
+    this.onWheel = (_pointer, _over, _dx, dy) => {
+      this.scrollList(dy * 0.4);
+    };
+    this.input.on('wheel', this.onWheel);
+
     this.showTab('amulets');
 
     const closeOnEscape = () => this.scene.stop();
     this.input.keyboard?.on('keydown-ESC', closeOnEscape);
-    this.events.once('shutdown', () => this.input.keyboard?.off('keydown-ESC', closeOnEscape));
+    this.events.once('shutdown', () => {
+      this.input.keyboard?.off('keydown-ESC', closeOnEscape);
+      if (this.onWheel) this.input.off('wheel', this.onWheel);
+      this.listContainer.clearMask(true);
+      this.listMaskGfx?.destroy();
+    });
+  }
+
+  private maxScroll(): number {
+    return Math.max(0, this.listContentH - LIST_H);
+  }
+
+  private scrollList(deltaY: number): void {
+    const max = this.maxScroll();
+    if (max <= 0) {
+      this.listScrollY = 0;
+      this.listContainer.y = LIST_TOP;
+      return;
+    }
+    // deltaY > 0 = scroll down (content moves up)
+    this.listScrollY = Phaser.Math.Clamp(this.listScrollY + deltaY, 0, max);
+    this.listContainer.y = LIST_TOP - this.listScrollY;
   }
 
   private makeTab(x: number, label: string, tab: AlmanacTab): void {
@@ -121,6 +192,8 @@ export class AlmanacScene extends Phaser.Scene {
   private showTab(tab: AlmanacTab): void {
     this.activeTab = tab;
     this.selectedEntryId = undefined;
+    this.listScrollY = 0;
+    this.listContainer.y = LIST_TOP;
     this.refreshTabStyles();
     this.listContainer.removeAll(true);
     this.detailContainer.removeAll(true);
@@ -174,30 +247,43 @@ export class AlmanacScene extends Phaser.Scene {
         symbol: 'B',
       }));
     } else {
-      entries = ACHIEVEMENTS.map((a) => ({
-        id: a.id,
-        title: a.name,
-        description: a.description,
-        lore: profile.almanac.achievements.includes(a.id)
-          ? 'Conquista desbloqueada.'
-          : 'Ainda oculta na memória da tribo.',
-        unlocked: profile.almanac.achievements.includes(a.id),
-        symbol: '★',
-      }));
+      entries = ACHIEVEMENTS.map((a) => {
+        const unlocked = profile.almanac.achievements.includes(a.id);
+        const revealLocked = isAchievementVisibleWhenLocked(a.tier);
+        return {
+          id: a.id,
+          title: a.name,
+          description: a.description,
+          lore: unlocked
+            ? 'Conquista desbloqueada.'
+            : revealLocked
+              ? `Conquista ${achievementTierLabel(a.tier).toLowerCase()} — ainda selada.`
+              : 'Ainda oculta na memória da tribo.',
+          detail: `Tipo: ${achievementTierLabel(a.tier)}`,
+          unlocked,
+          revealLocked,
+          tier: a.tier,
+          symbol:
+            a.tier === 'ancestral' ? '◆' : a.tier === 'tribal' ? '◈' : a.tier === 'secret' ? '✦' : '★',
+        };
+      });
     }
 
-    // First list item starts lower to clear the tab row
+    // Itens relativos ao container (y=0 no topo do viewport)
     entries.forEach((entry, index) => {
-      const y = 210 + index * 48;
+      const y = ROW_H / 2 + index * ROW_STEP;
+      const stroke = entry.tier ? TIER_STROKE[entry.tier] : 0x8c7950;
+      const width = entry.tier === 'ancestral' ? 3 : entry.tier === 'tribal' ? 2 : 1;
       const row = this.add
-        .rectangle(300, y, 480, 42, 0xd8c89c)
-        .setStrokeStyle(1, 0x8c7950)
+        .rectangle(LIST_X + LIST_W / 2, y, LIST_W - 20, ROW_H, 0xd8c89c)
+        .setStrokeStyle(width, stroke)
         .setInteractive({ useHandCursor: true });
+      const showInfo = entry.unlocked || entry.revealLocked;
       const text = this.add
         .text(
-          80,
+          LIST_X + 24,
           y,
-          entry.unlocked
+          showInfo
             ? `${entry.symbol ?? '·'}  ${entry.title}${entry.rarityLabel ? `  ${entry.rarityLabel}` : ''}`
             : '?  ???',
           {
@@ -213,6 +299,10 @@ export class AlmanacScene extends Phaser.Scene {
       this.listContainer.add([row, text]);
     });
 
+    this.listContentH = entries.length > 0
+      ? entries.length * ROW_STEP
+      : 0;
+
     const first = entries.find((e) => e.unlocked) ?? entries[0];
     if (first) this.selectEntry(first);
   }
@@ -221,8 +311,11 @@ export class AlmanacScene extends Phaser.Scene {
     this.selectedEntryId = entry.id;
     this.rowHighlights.forEach((row, id) => {
       const selected = id === entry.id;
+      const matched = entriesTier(id);
       row.setFillStyle(selected ? 0xf0e0b0 : 0xd8c89c);
-      row.setStrokeStyle(selected ? 3 : 1, selected ? COLORS.accent : 0x8c7950);
+      const baseStroke = matched ? TIER_STROKE[matched] : 0x8c7950;
+      const width = matched === 'ancestral' ? 3 : matched === 'tribal' ? 2 : selected ? 3 : 1;
+      row.setStrokeStyle(width, selected ? COLORS.accent : baseStroke);
     });
     this.showDetail(entry);
   }
@@ -230,15 +323,25 @@ export class AlmanacScene extends Phaser.Scene {
   private showDetail(entry: AlmanacEntry): void {
     this.detailContainer.removeAll(true);
 
+    const reveal = entry.unlocked || Boolean(entry.revealLocked);
+    const detailStroke = entry.tier ? TIER_STROKE[entry.tier] : 0x8c7950;
+    const detailWidth = entry.tier === 'ancestral' ? 4 : entry.tier === 'tribal' ? 3 : 2;
+
     this.detailContainer.add(
-      this.add.rectangle(900, 420, 480, 460, 0xd8c89c).setStrokeStyle(2, 0x8c7950),
+      this.add.rectangle(900, 420, 480, 460, 0xd8c89c).setStrokeStyle(detailWidth, detailStroke),
     );
 
-    if (entry.unlocked && entry.textureKey && this.textures.exists(entry.textureKey)) {
+    if (entry.tier === 'ancestral') {
+      this.detailContainer.add(
+        this.add.rectangle(900, 420, 460, 440, 0x000000, 0).setStrokeStyle(1, 0xffe08a),
+      );
+    }
+
+    if (reveal && entry.textureKey && this.textures.exists(entry.textureKey)) {
       this.detailContainer.add(
         this.add.image(900, 260, entry.textureKey).setDisplaySize(128, 128),
       );
-    } else if (entry.unlocked && entry.symbol) {
+    } else if (reveal && entry.symbol) {
       this.detailContainer.add(this.add.circle(900, 260, 56, COLORS.accent));
       this.detailContainer.add(
         this.add
@@ -264,7 +367,7 @@ export class AlmanacScene extends Phaser.Scene {
 
     this.detailContainer.add(
       this.add
-        .text(900, 350, entry.unlocked ? entry.title : '???', {
+        .text(900, 350, reveal ? entry.title : '???', {
           fontFamily: 'Georgia, "Times New Roman", serif',
           fontSize: '24px',
           color: '#342815',
@@ -279,7 +382,7 @@ export class AlmanacScene extends Phaser.Scene {
         .text(
           900,
           395,
-          entry.unlocked ? entry.description : 'Este registro ainda não foi descoberto.',
+          reveal ? entry.description : 'Este registro ainda não foi descoberto.',
           {
             fontFamily: 'Segoe UI, Tahoma, sans-serif',
             fontSize: '15px',
@@ -291,7 +394,7 @@ export class AlmanacScene extends Phaser.Scene {
         .setOrigin(0.5, 0),
     );
 
-    if (entry.unlocked && entry.detail) {
+    if (reveal && entry.detail) {
       this.detailContainer.add(
         this.add
           .text(900, 460, entry.detail, {
@@ -305,7 +408,7 @@ export class AlmanacScene extends Phaser.Scene {
       );
     }
 
-    if (entry.unlocked && entry.lore) {
+    if (reveal && entry.lore) {
       this.detailContainer.add(
         this.add
           .text(900, 520, entry.lore, {
@@ -320,7 +423,7 @@ export class AlmanacScene extends Phaser.Scene {
       );
     }
 
-    if (entry.unlocked && entry.rarityLabel) {
+    if (reveal && entry.rarityLabel) {
       this.detailContainer.add(
         this.add
           .text(900, 590, entry.rarityLabel, {
@@ -332,4 +435,8 @@ export class AlmanacScene extends Phaser.Scene {
       );
     }
   }
+}
+
+function entriesTier(id: string): AchievementTier | undefined {
+  return ACHIEVEMENTS.find((a) => a.id === id)?.tier;
 }

@@ -7,6 +7,9 @@ import { GameScene } from './scenes/GameScene';
 import { MenuScene } from './scenes/MenuScene';
 import { PauseScene } from './scenes/PauseScene';
 import { UpgradeScene } from './scenes/UpgradeScene';
+import { AuthService } from './services/AuthService';
+
+void AuthService.init();
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,

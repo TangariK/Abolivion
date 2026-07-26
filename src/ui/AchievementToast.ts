@@ -1,7 +1,21 @@
 import Phaser from 'phaser';
 import { COLORS, GAME_WIDTH } from '../config/GameConfig';
 import { getAchievement } from '../data/Achievements';
-import type { AchievementId } from '../data/types';
+import type { AchievementId, AchievementTier } from '../data/types';
+
+const TIER_STROKE: Record<AchievementTier, number> = {
+  normal: COLORS.accent,
+  secret: 0x8a7a55,
+  tribal: 0x5ec4a0,
+  ancestral: 0xffe08a,
+};
+
+const TIER_TITLE: Record<AchievementTier, string> = {
+  normal: 'CONQUISTA',
+  secret: 'SECRETA',
+  tribal: 'TRIBAL',
+  ancestral: 'ANCESTRAL',
+};
 
 /** Side card toast queue for newly unlocked achievements */
 export class AchievementToast {
@@ -21,17 +35,18 @@ export class AchievementToast {
     this.busy = true;
     const id = this.queue.shift()!;
     const def = getAchievement(id);
+    const stroke = TIER_STROKE[def.tier];
 
     const x = GAME_WIDTH - 170;
     const y = 120;
     const bg = this.scene.add
       .rectangle(0, 0, 300, 84, 0x1a2a1e, 0.96)
-      .setStrokeStyle(2, COLORS.accent);
+      .setStrokeStyle(def.tier === 'ancestral' ? 3 : 2, stroke);
     const title = this.scene.add
-      .text(-130, -26, 'CONQUISTA', {
+      .text(-130, -26, TIER_TITLE[def.tier], {
         fontFamily: 'Segoe UI, Tahoma, sans-serif',
         fontSize: '12px',
-        color: '#c4a35a',
+        color: def.tier === 'ancestral' ? '#ffe08a' : '#c4a35a',
       });
     const name = this.scene.add
       .text(-130, -6, def.name, {

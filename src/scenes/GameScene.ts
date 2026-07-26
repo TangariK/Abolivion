@@ -6,11 +6,15 @@ import {
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config/GameConfig';
+import { FREE_MODE_ACHIEVEMENTS } from '../data/Achievements';
+import { BOSS_DEFS } from '../data/EnemyCatalog';
 import { GameSettingsStore, type PlayerCount } from '../data/GameModeStore';
 import type {
   AchievementId,
   AmuletId,
   BossId,
+  EnemyType,
+  FreeModeConfig,
   GameModeId,
   PlayerStats,
   RunAmuletState,
@@ -27,10 +31,13 @@ import { LevelSystem } from '../systems/LevelSystem';
 import { SpawnSystem } from '../systems/SpawnSystem';
 import { WaveSystem } from '../systems/WaveSystem';
 import { WeaponSystem } from '../systems/WeaponSystem';
+import { AuthService } from '../services/AuthService';
 import { AchievementToast } from '../ui/AchievementToast';
 import { getAmulet } from '../upgrades/Amulets';
 import { applyMetaToStats } from '../upgrades/MetaShop';
 import { SaveManager } from '../upgrades/MetaUpgrades';
+import { RUN_UPGRADES } from '../upgrades/RunUpgrades';
+import { formatDuration } from '../utils/formatDuration';
 
 export class GameScene extends Phaser.Scene {
   private player1!: Player;
@@ -55,7 +62,11 @@ export class GameScene extends Phaser.Scene {
 
   private mode: GameModeId = 'infinite';
   private kills = 0;
-  private runStart = 0;
+  private killStreak = 0;
+  private bestKillStreakRun = 0;
+  private shotsFired = 0;
+  private shotsHit = 0;
+  private survivalMs = 0;
   private pendingChoices: Array<'upgrade' | 'amulet'> = [];
   private choosingUpgrade = false;
   private gameOverTriggered = false;
@@ -65,6 +76,14 @@ export class GameScene extends Phaser.Scene {
   private nextLightningTick = 0;
   private bossesDefeated: BossId[] = [];
   private amulets: RunAmuletState = this.createEmptyAmuletState();
+  private tookDamage = false;
+  private tookDamageDuringKurupi = false;
+  private kurupiMinionKills = 0;
+  private lastAmuletWasThreeMoons = false;
+  private freeConfig?: FreeModeConfig;
+  private customSpawnDone = false;
+  private customTotal = 0;
+  private nameTags: Array<{ player: Player; text: Phaser.GameObjects.Text }> = [];
 
   private hpBarBg!: Phaser.GameObjects.Graphics;
   private hpBarFill!: Phaser.GameObjects.Graphics;
@@ -85,6 +104,10 @@ export class GameScene extends Phaser.Scene {
     this.mode = GameSettingsStore.getMode();
     this.playerCount = GameSettingsStore.getPlayerCount();
     this.kills = 0;
+    this.killStreak = 0;
+    this.bestKillStreakRun = 0;
+    this.shotsFired = 0;
+    this.shotsHit = 0;
     this.pendingChoices = [];
     this.choosingUpgrade = false;
     this.gameOverTriggered = false;
@@ -99,7 +122,15 @@ export class GameScene extends Phaser.Scene {
     this.nextBossAbility = 0;
     this.nextLightningTick = 0;
     this.bossesDefeated = [];
-    this.runStart = this.time.now;
+    this.tookDamage = false;
+    this.tookDamageDuringKurupi = false;
+    this.kurupiMinionKills = 0;
+    this.lastAmuletWasThreeMoons = false;
+    this.freeConfig = this.mode === 'free' ? GameSettingsStore.getFreeConfig() : undefined;
+    this.customSpawnDone = false;
+    this.customTotal = 0;
+    this.nameTags = [];
+    this.survivalMs = 0;
     this.levelSystem = new LevelSystem();
     this.toasts = new AchievementToast(this);
 
@@ -123,7 +154,20 @@ export class GameScene extends Phaser.Scene {
       xpPickupRadius: PLAYER_BASE.xpPickupRadius,
       xpGainBonus: PLAYER_BASE.xpGainBonus,
     };
-    const stats = applyMetaToStats(baseStats, profile);
+    let stats: PlayerStats;
+    if (this.freeConfig) {
+      stats = this.freeConfig.useMeta
+        ? applyMetaToStats(baseStats, { ...profile, metaLevels: this.freeConfig.metaLevels })
+        : { ...baseStats };
+      for (const upgrade of RUN_UPGRADES) {
+        const count = this.freeConfig.buffCounts[upgrade.id] ?? 0;
+        for (let i = 0; i < count; i++) upgrade.apply(stats);
+      }
+      stats.hp = stats.maxHp;
+      this.levelSystem.level = Math.max(1, this.freeConfig.startLevel);
+    } else {
+      stats = applyMetaToStats(baseStats, profile);
+    }
 
     this.player1 = new Player(this, cx, cy + 80, stats, 1);
     this.players = [this.player1];
@@ -152,6 +196,9 @@ export class GameScene extends Phaser.Scene {
       this.player1,
       this.projectiles,
       () => this.player1.aimAngle,
+      () => {
+        this.shotsFired += 1;
+      },
     );
 
     if (this.mode === 'waves') {
@@ -164,15 +211,45 @@ export class GameScene extends Phaser.Scene {
         onWaveCleared: (wave) => {
           this.showToast(`Rodada ${wave} concluída`);
           if (wave >= 10) this.unlockAchievement('wave_survivor');
+          if (wave >= 30) this.unlockAchievement('long_night');
+          if (wave >= 20 && !this.tookDamage) this.unlockAchievement('pristine_path');
         },
       });
       this.enemies = this.waves.enemies;
       // Start after create finishes so the first spawn doesn't hitch input/HUD setup
       this.time.delayedCall(0, () => this.waves?.start());
+    } else if (this.freeConfig && this.freeConfig.baseKind === 'wave') {
+      this.waves = new WaveSystem(
+        this,
+        this.player1,
+        {
+          onEncounter: () => {},
+          onBossSpawn: (id) => {
+            this.showToast(id === 'kurupi_brood' ? 'Kurupi da Ninhada!' : 'Boitatá do Olhar!');
+          },
+          onWaveCleared: () => this.freeVictory(),
+        },
+        { startWave: this.freeConfig.wave, singleWave: true },
+      );
+      this.enemies = this.waves.enemies;
+      this.time.delayedCall(0, () => this.waves?.start());
+    } else if (this.freeConfig && this.freeConfig.baseKind === 'custom') {
+      this.enemies = this.physics.add.group({
+        classType: Enemy,
+        maxSize: 400,
+        runChildUpdate: false,
+      });
+      const cfg = this.freeConfig;
+      this.time.delayedCall(0, () => this.spawnCustomScenario(cfg));
     } else {
+      // Infinito normal, ou Livre com base Infinito
       this.spawner = new SpawnSystem(this, this.player1, (type) => {
         SaveManager.discoverEnemy(type);
       });
+      if (this.freeConfig) {
+        this.spawner.seedElapsed(this.freeConfig.startTimeMs);
+        this.survivalMs = this.freeConfig.startTimeMs;
+      }
       this.enemies = this.spawner.enemies;
       this.spawner.start();
     }
@@ -185,6 +262,9 @@ export class GameScene extends Phaser.Scene {
         partner,
         this.projectiles,
         () => partner.aimAngle,
+        () => {
+          this.shotsFired += 1;
+        },
       );
       this.weapon2.start();
     }
@@ -196,6 +276,12 @@ export class GameScene extends Phaser.Scene {
       runChildUpdate: true,
     });
 
+    if (this.freeConfig) {
+      for (const id of this.freeConfig.amulets) this.applyAmulet(id);
+      this.unlockAchievement('free_trial');
+    }
+
+    this.createNameTags(profile.prefs?.showNameTag ?? false);
     this.setupCollisions();
     this.createHud();
 
@@ -229,9 +315,112 @@ export class GameScene extends Phaser.Scene {
   }
 
   private unlockAchievement(id: AchievementId): void {
+    // No Modo Livre só valem as conquistas exclusivas dele
+    if (this.mode === 'free' && !FREE_MODE_ACHIEVEMENTS.includes(id)) return;
     if (SaveManager.unlockAchievement(id)) {
       this.toasts.enqueue(id);
     }
+  }
+
+  private createNameTags(showNameTag: boolean): void {
+    const makeTag = (label: string) =>
+      this.add
+        .text(0, 0, label, {
+          fontFamily: 'Segoe UI, Tahoma, sans-serif',
+          fontSize: '13px',
+          color: '#f4d77b',
+          backgroundColor: 'rgba(13,26,18,0.75)',
+          padding: { x: 6, y: 2 },
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(60);
+
+    if (this.playerCount === 2) {
+      // Local: identifica as bolinhas por P1/P2
+      this.nameTags.push({ player: this.player1, text: makeTag('P1') });
+      if (this.player2) this.nameTags.push({ player: this.player2, text: makeTag('P2') });
+      return;
+    }
+
+    if (showNameTag && AuthService.isLoggedIn()) {
+      this.nameTags.push({ player: this.player1, text: makeTag(AuthService.username()) });
+    }
+  }
+
+  private updateNameTags(): void {
+    for (const tag of this.nameTags) {
+      tag.text.setPosition(tag.player.x, tag.player.y - 24);
+      tag.text.setAlpha(tag.player.isDead() ? 0.35 : 1);
+    }
+  }
+
+  private freeSpawnPosition(): { x: number; y: number } {
+    const cam = this.cameras.main;
+    const margin = 80;
+    const side = Phaser.Math.Between(0, 3);
+    let x = 0;
+    let y = 0;
+    switch (side) {
+      case 0:
+        x = Phaser.Math.Between(cam.worldView.left - margin, cam.worldView.right + margin);
+        y = cam.worldView.top - margin;
+        break;
+      case 1:
+        x = Phaser.Math.Between(cam.worldView.left - margin, cam.worldView.right + margin);
+        y = cam.worldView.bottom + margin;
+        break;
+      case 2:
+        x = cam.worldView.left - margin;
+        y = Phaser.Math.Between(cam.worldView.top - margin, cam.worldView.bottom + margin);
+        break;
+      default:
+        x = cam.worldView.right + margin;
+        y = Phaser.Math.Between(cam.worldView.top - margin, cam.worldView.bottom + margin);
+        break;
+    }
+    x = Phaser.Math.Clamp(x, 40, WORLD_WIDTH - 40);
+    y = Phaser.Math.Clamp(y, 40, WORLD_HEIGHT - 40);
+    return { x, y };
+  }
+
+  private spawnFreeEnemy(type: EnemyType): void {
+    const pos = this.freeSpawnPosition();
+    const enemy = this.enemies.get() as Enemy | null;
+    if (enemy) enemy.spawn(pos.x, pos.y, type);
+  }
+
+  private spawnCustomScenario(cfg: FreeModeConfig): void {
+    let total = 0;
+    for (const [type, count] of Object.entries(cfg.customEnemies) as Array<[EnemyType, number]>) {
+      for (let i = 0; i < count; i++) {
+        this.spawnFreeEnemy(type);
+        total += 1;
+      }
+    }
+    for (const id of cfg.customBosses) {
+      const def = BOSS_DEFS[id];
+      const pos = this.freeSpawnPosition();
+      const enemy = this.enemies.get() as Enemy | null;
+      if (enemy) {
+        enemy.spawnBoss(pos.x, pos.y, def);
+        total += 1;
+      }
+    }
+    this.customTotal = Math.max(total, 1);
+    this.customSpawnDone = true;
+  }
+
+  private freeVictory(): void {
+    if (this.gameOverTriggered) return;
+    const cfg = this.freeConfig;
+    if (cfg && cfg.customBosses.length >= 3) {
+      this.unlockAchievement('triple_tyrants');
+      const noBuffs = Object.values(cfg.buffCounts).every((count) => !count);
+      if (noBuffs && cfg.amulets.length === 0 && !cfg.useMeta && cfg.startLevel <= 1) {
+        this.unlockAchievement('naked_trial');
+      }
+    }
+    this.triggerGameOver(true);
   }
 
   private setupCollisions(): void {
@@ -239,6 +428,7 @@ export class GameScene extends Phaser.Scene {
       const proj = projObj as Projectile;
       const enemy = enemyObj as Enemy;
       if (!proj.active || !enemy.active) return;
+      this.shotsHit += 1;
       this.damageEnemy(enemy, proj.damage);
       proj.deactivate();
     });
@@ -248,6 +438,7 @@ export class GameScene extends Phaser.Scene {
         const enemy = enemyObj as Enemy;
         if (!enemy.active || player.isDead()) return;
         const hit = player.takeDamage(enemy.contactDamage, this.time.now);
+        if (hit) this.onPlayerDamaged();
         if (hit && this.amulets.thorns) {
           this.damageEnemy(enemy, Math.max(8, Math.floor(enemy.contactDamage * 0.7)));
         }
@@ -258,7 +449,8 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.overlap(player, this.bossShots, (_p, shotObj) => {
         const shot = shotObj as BossProjectile;
         if (!shot.active || player.isDead()) return;
-        player.takeDamage(shot.damage, this.time.now);
+        const hit = player.takeDamage(shot.damage, this.time.now);
+        if (hit) this.onPlayerDamaged();
         shot.deactivate();
         // thorns only vs contact enemies; ignore projectile reflection for MVP
       });
@@ -287,14 +479,44 @@ export class GameScene extends Phaser.Scene {
     this.redrawHud();
   }
 
+  private onPlayerDamaged(): void {
+    this.tookDamage = true;
+    this.killStreak = 0;
+    if (this.waves?.activeBossId === 'kurupi_brood') {
+      this.tookDamageDuringKurupi = true;
+    }
+  }
+
   private onEnemyKilled(enemy: Enemy): void {
     this.kills += 1;
+    this.killStreak += 1;
+    this.bestKillStreakRun = Math.max(this.bestKillStreakRun, this.killStreak);
     if (this.kills === 1) this.unlockAchievement('first_blood');
+
+    if (
+      this.waves?.activeBossId === 'kurupi_brood'
+      && !enemy.isBoss
+      && !this.bossesDefeated.includes('kurupi_brood')
+    ) {
+      this.kurupiMinionKills += 1;
+      if (this.kurupiMinionKills >= 10) this.unlockAchievement('brood_scouts');
+      if (this.kurupiMinionKills >= 50) this.unlockAchievement('brood_horde');
+      if (this.kurupiMinionKills >= 100) this.unlockAchievement('brood_swarm');
+    }
 
     if (enemy.isBoss && enemy.bossId) {
       this.bossesDefeated.push(enemy.bossId);
       SaveManager.discoverBoss(enemy.bossId);
       this.unlockAchievement('boss_slayer');
+      if (enemy.bossId === 'kurupi_brood' && !this.tookDamageDuringKurupi) {
+        this.unlockAchievement('untouched_brood');
+      }
+      if (
+        this.bossesDefeated.includes('kurupi_brood')
+        && this.bossesDefeated.includes('boitata_gaze')
+      ) {
+        this.unlockAchievement('twin_tyrants');
+      }
     }
 
     const xp = Math.max(1, Math.floor(enemy.xpValue * (1 + this.player1.stats.xpGainBonus)));
@@ -357,6 +579,13 @@ export class GameScene extends Phaser.Scene {
     if (this.amulets.owned.includes(id)) return;
     this.amulets.owned.push(id);
     this.unlockAchievement('amulet_bearer');
+    if (this.amulets.owned.length >= 5) this.unlockAchievement('five_relics');
+
+    const rarity = getAmulet(id).rarity;
+    if (rarity === 3 && this.lastAmuletWasThreeMoons) {
+      this.unlockAchievement('twin_moons');
+    }
+    this.lastAmuletWasThreeMoons = rarity === 3;
 
     switch (id) {
       case 'araci_eyes':
@@ -370,6 +599,7 @@ export class GameScene extends Phaser.Scene {
       case 'caipora_echo':
         this.amulets.backwardShot = true;
         this.forEachWeapon((weapon) => weapon.enableBackwardShot());
+        this.unlockAchievement('echo_walker');
         break;
       case 'anhanga_circle':
         this.amulets.damageAura = true;
@@ -395,6 +625,7 @@ export class GameScene extends Phaser.Scene {
       case 'tupa_storm':
         this.amulets.lightningStorm = true;
         this.unlockAchievement('storm_touched');
+        this.unlockAchievement('storm_crown');
         break;
     }
   }
@@ -456,7 +687,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateBossAbilities(time: number): void {
-    if (this.mode !== 'waves' || !this.waves || this.waves.phase !== 'combat') return;
+    const wavesCombat = this.waves !== undefined && this.waves.phase === 'combat';
+    const freeCustom = this.mode === 'free' && this.freeConfig?.baseKind === 'custom';
+    if (!wavesCombat && !freeCustom) return;
     if (time < this.nextBossAbility) return;
 
     const boss = (this.enemies.getChildren() as Enemy[]).find(
@@ -466,8 +699,14 @@ export class GameScene extends Phaser.Scene {
 
     if (boss.bossId === 'kurupi_brood') {
       this.nextBossAbility = time + 2200;
-      this.waves.spawnExtra(Math.random() < 0.5 ? 'fast' : 'swift');
-      this.waves.spawnExtra('normal');
+      if (this.waves) {
+        this.waves.spawnExtra(Math.random() < 0.5 ? 'fast' : 'swift');
+        this.waves.spawnExtra('normal');
+      } else {
+        this.spawnFreeEnemy(Math.random() < 0.5 ? 'fast' : 'swift');
+        this.spawnFreeEnemy('normal');
+        this.customTotal += 2;
+      }
       return;
     }
 
@@ -533,7 +772,10 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setScrollFactor(0)
       .setDepth(102)
-      .setVisible(this.mode === 'waves');
+      .setVisible(
+        this.waves !== undefined
+        || (this.mode === 'free' && this.freeConfig?.baseKind === 'custom'),
+      );
 
     this.amuletBadges = this.add.container(0, 0).setScrollFactor(0).setDepth(103);
     this.redrawHud();
@@ -589,15 +831,25 @@ export class GameScene extends Phaser.Scene {
     this.xpBarFill.clear().fillStyle(COLORS.hudXp, 1)
       .fillRect(x, xpY, barW * Phaser.Math.Clamp(xpRatio, 0, 1), 10);
 
-    const survivalSec = Math.floor((this.time.now - this.runStart) / 1000);
-    const modeLabel = this.mode === 'waves' ? 'Rodadas' : 'Infinito';
+    const modeLabel =
+      this.mode === 'waves' ? 'Rodadas' : this.mode === 'free' ? 'Livre' : 'Infinito';
     this.hudText.setText(
-      `${modeLabel}  |  Nv ${this.levelSystem.level}  |  Abates ${this.kills}  |  ${survivalSec}s`,
+      `${modeLabel}  |  Nv ${this.levelSystem.level}  |  Abates ${this.kills}  |  ${formatDuration(this.survivalMs)}`,
     );
 
     this.waveHudBg.clear();
     this.waveHudFill.clear();
-    if (this.mode === 'waves' && this.waves) {
+    if (this.mode === 'free' && this.freeConfig?.baseKind === 'custom') {
+      const w = 420;
+      const hx = (GAME_WIDTH - w) / 2;
+      const hy = 40;
+      const active = (this.enemies.getChildren() as Enemy[]).filter((e) => e.active).length;
+      const ratio = this.customTotal > 0 ? active / this.customTotal : 0;
+      this.waveHudBg.fillStyle(COLORS.hudBg, 0.9).fillRect(hx, hy, w, 14);
+      this.waveHudFill.fillStyle(0xe05c5c, 1)
+        .fillRect(hx, hy, w * Phaser.Math.Clamp(ratio, 0, 1), 14);
+      this.waveHudText.setText(`Cenário personalizado  ·  Restam ${active}`);
+    } else if (this.waves) {
       const w = 420;
       const hx = (GAME_WIDTH - w) / 2;
       const hy = 40;
@@ -656,7 +908,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
-    if (this.gameOverTriggered || this.choosingUpgrade) return;
+    if (this.gameOverTriggered) return;
+
+    if (!this.choosingUpgrade) {
+      this.survivalMs += delta;
+    }
+
+    if (this.choosingUpgrade) return;
 
     if (this.inputSystem.isPausePressed()) {
       this.scene.pause();
@@ -686,6 +944,19 @@ export class GameScene extends Phaser.Scene {
     this.updateAmulets(time);
     this.updateBossAbilities(time);
     this.updateCameraTarget(living);
+    this.updateNameTags();
+
+    if (
+      this.mode === 'free'
+      && this.freeConfig?.baseKind === 'custom'
+      && this.customSpawnDone
+    ) {
+      const anyActive = (this.enemies.getChildren() as Enemy[]).some((e) => e.active);
+      if (!anyActive) {
+        this.freeVictory();
+        return;
+      }
+    }
 
     // Magnet pull + radius collect for XP, using each living player's pickup radius
     for (const orbObj of this.xpOrbs.getChildren() as XPOrb[]) {
@@ -711,11 +982,26 @@ export class GameScene extends Phaser.Scene {
 
     this.redrawHud();
 
-    if (this.mode === 'infinite' && time - this.runStart >= 180000) {
+    if (this.mode === 'infinite' && this.survivalMs >= 180000) {
       this.unlockAchievement('night_walker');
     }
 
-    if (this.playerCount === 2 && time - this.runStart >= 120000) {
+    if (this.mode === 'infinite' && this.survivalMs >= 600000 && !this.tookDamage) {
+      this.unlockAchievement('eternal_vigil');
+    }
+
+    if (this.mode === 'infinite' && this.survivalMs >= 1200000) {
+      this.unlockAchievement('endless_dawn');
+    }
+
+    if (this.survivalMs >= 60000) {
+      this.unlockAchievement('hut_defender');
+    }
+
+    if (this.levelSystem.level >= 10) this.unlockAchievement('forest_pupil');
+    if (this.levelSystem.level >= 15) this.unlockAchievement('rising_spirit');
+
+    if (this.playerCount === 2 && this.survivalMs >= 120000) {
       this.unlockAchievement('partners_of_night');
     }
 
@@ -751,7 +1037,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private triggerGameOver(): void {
+  private triggerGameOver(victory = false): void {
     if (this.gameOverTriggered) return;
     this.gameOverTriggered = true;
 
@@ -761,12 +1047,34 @@ export class GameScene extends Phaser.Scene {
     this.waves?.destroy();
     for (const player of this.players) player.setVelocity(0, 0);
 
-    const survivalMs = this.time.now - this.runStart;
-    const coinsEarned = Math.max(
-      1,
-      Math.floor(this.levelSystem.totalXpCollected * 0.5 + this.kills * 0.75),
-    );
-    SaveManager.addCurrency(coinsEarned);
+    const survivalMs = this.survivalMs;
+    const isFree = this.mode === 'free';
+    const coinsEarned = isFree
+      ? 0
+      : Math.max(1, Math.floor(this.levelSystem.totalXpCollected * 0.5 + this.kills * 0.75));
+
+    if (!isFree) {
+      SaveManager.addCurrency(coinsEarned);
+      const living = this.livingPlayers();
+      const lowestHp = living.length > 0
+        ? Math.min(...living.map((p) => Math.ceil(p.stats.hp)))
+        : undefined;
+      const accuracy = this.shotsFired > 0
+        ? Math.round((this.shotsHit / this.shotsFired) * 100)
+        : undefined;
+      SaveManager.recordRunStats({
+        survivalMs,
+        kills: this.kills,
+        level: this.levelSystem.level,
+        mode: this.mode as 'infinite' | 'waves' | 'story',
+        waveReached: this.waves?.wave,
+        coinsEarned,
+        killStreak: this.bestKillStreakRun,
+        bossesDefeated: this.bossesDefeated.length,
+        lowestHpSurvive: victory || living.length > 0 ? lowestHp : undefined,
+        accuracy,
+      });
+    }
 
     const summary: RunSummary = {
       kills: this.kills,
@@ -777,6 +1085,8 @@ export class GameScene extends Phaser.Scene {
       mode: this.mode,
       waveReached: this.waves?.wave,
       bossesDefeated: [...this.bossesDefeated],
+      freeMode: isFree,
+      victory,
     };
 
     this.time.delayedCall(400, () => {

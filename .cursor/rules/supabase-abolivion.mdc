@@ -1,0 +1,18 @@
+---
+description: Use only the Abolivion Supabase project; never the other linked Supabase MCP
+alwaysApply: true
+---
+
+# Abolivion — Supabase / MCP
+
+- **Project ref:** `rjhwjhfrrmwwqmkpyupc`
+- **URL:** `https://rjhwjhfrrmwwqmkpyupc.supabase.co`
+- **MCP deste repo:** `supabase-abolivion` (`.cursor/mcp.json`, escopado com `project_ref`)
+
+## Regras
+
+1. Para SQL, migrations, Auth, logs ou advisors do Abolivion, use **`supabase-abolivion`**.
+2. **Não** use o MCP global `user-supabase` neste projeto — ele aponta para outro banco (não é o Abolivion).
+3. Tabelas do jogo usam o prefixo `abolivion_` (ex.: `abolivion_profiles`). Nunca altere tabelas de outros apps no mesmo projeto.
+4. Cliente do jogo (`VITE_*`) só pode ter **publishable/anon key**. Nunca coloque `sb_secret_` / service_role em variável `VITE_`.
+5. Migração local: `npm run db:migrate` com `DATABASE_URL` no `.env` (gitignored).

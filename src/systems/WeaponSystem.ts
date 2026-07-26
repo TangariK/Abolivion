@@ -13,17 +13,20 @@ export class WeaponSystem {
   private diagonalShot = false;
   private backwardShot = false;
   private getAimAngle: () => number;
+  private onShot?: () => void;
 
   constructor(
     scene: Phaser.Scene,
     player: Player,
     projectiles: Phaser.Physics.Arcade.Group,
     getAimAngle: () => number,
+    onShot?: () => void,
   ) {
     this.scene = scene;
     this.player = player;
     this.projectiles = projectiles;
     this.getAimAngle = getAimAngle;
+    this.onShot = onShot;
   }
 
   enableParallelShot(): void {
@@ -98,6 +101,7 @@ export class WeaponSystem {
       this.player.stats.projectileSpeed,
       this.player.stats.damage,
     );
+    this.onShot?.();
   }
 
   /** Auto-aim helper for player 2 */

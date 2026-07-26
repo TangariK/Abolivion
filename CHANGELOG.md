@@ -19,6 +19,29 @@ _Mudanças em desenvolvimento, ainda sem número de versão._
 
 ---
 
+## [0.1.4] — 2026-07-26
+
+### Adicionado
+
+- Conta cloud via Supabase (cadastro / login / logout) no botão de perfil do menu
+- Cadastro com usuário e senha; e-mail opcional com confirmação via Edge Function + Brevo
+  (reenvio, adicionar/trocar e-mail, recuperação de senha; não bloqueia o acesso)
+- Aviso de progresso em cache quando o jogador está como convidado
+- Sync de perfil (`abolivion_profiles`) com RLS
+- Perfil logado: Informações básicas, Opções, Legado (stats) e painel Dev (admin)
+- Modo Livre: setup customizado (nível, buffs, amuletos, rodada/tempo, inimigos, chefões);
+  sem moedas/unlocks; conquistas exclusivas do modo
+- Quatro tiers de conquistas: Normal, Secreta, Tribal e Ancestral
+- Novas conquistas (comuns, secretas da ninhada do Kurupi, tribal, ancestral e do Modo Livre)
+- Conquista Nome na Tribo ao autenticar
+- Timer de sobrevivência formatado (`45s` / `1m 5s` / `1h 2m 3s`) e scroll com máscara no Marã
+
+### Detalhamento
+
+Ver [`docs/versions/0.1.4.md`](docs/versions/0.1.4.md).
+
+---
+
 ## [0.1.3] — 2026-07-25
 
 ### Adicionado

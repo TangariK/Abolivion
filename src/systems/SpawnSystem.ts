@@ -27,8 +27,12 @@ export class SpawnSystem {
     });
   }
 
+  /** Começa a run como se já tivessem passado `ms` (Modo Livre). */
+  seedElapsed(ms: number): void {
+    this.elapsed = Math.max(0, ms);
+  }
+
   start(): void {
-    this.elapsed = 0;
     this.spawnTimer = this.scene.time.addEvent({
       delay: 800,
       loop: true,

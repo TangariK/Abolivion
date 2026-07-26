@@ -6,3 +6,8 @@ dist
 *.zip
 abolivion-gamejolt.zip
 abolivion-v*-gamejolt.zip
+.env
+.env.*
+!.env.example
+
+supabase/.temp/

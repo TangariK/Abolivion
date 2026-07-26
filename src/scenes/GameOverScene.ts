@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config/GameConfig';
 import type { RunSummary } from '../data/types';
 import { SaveManager } from '../upgrades/MetaUpgrades';
+import { formatDuration } from '../utils/formatDuration';
 
 export class GameOverScene extends Phaser.Scene {
   private summary!: RunSummary;
@@ -22,27 +23,43 @@ export class GameOverScene extends Phaser.Scene {
     g.fillCircle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 360);
 
     this.add
-      .text(GAME_WIDTH / 2, 120, 'VOCÊ CAIU', {
-        fontFamily: 'Georgia, "Times New Roman", serif',
-        fontSize: '56px',
-        color: '#e85d5d',
-      })
+      .text(
+        GAME_WIDTH / 2,
+        120,
+        this.summary.victory ? 'VITÓRIA!' : 'VOCÊ CAIU',
+        {
+          fontFamily: 'Georgia, "Times New Roman", serif',
+          fontSize: '56px',
+          color: this.summary.victory ? '#f4d77b' : '#e85d5d',
+        },
+      )
       .setOrigin(0.5);
 
-    const secs = Math.floor(this.summary.survivalMs / 1000);
+    const secs = formatDuration(this.summary.survivalMs);
     const profile = SaveManager.load();
 
+    const modeLabel =
+      this.summary.mode === 'waves'
+        ? 'Rodadas'
+        : this.summary.mode === 'free'
+          ? 'Livre'
+          : 'Infinito';
+
     const lines = [
-      `Modo: ${this.summary.mode === 'waves' ? 'Rodadas' : 'Infinito'}`,
+      `Modo: ${modeLabel}`,
       `Nível alcançado: ${this.summary.level}`,
       ...(this.summary.waveReached
         ? [`Rodada alcançada: ${this.summary.waveReached}`]
         : []),
       `Abates: ${this.summary.kills}`,
-      `Tempo: ${secs}s`,
+      `Tempo: ${secs}`,
       `XP coletado: ${this.summary.xpCollected}`,
-      `Moedas ganhas: +${this.summary.coinsEarned}`,
-      `Total de moedas: ${profile.currency}`,
+      ...(this.summary.freeMode
+        ? ['Modo Livre — sem recompensas']
+        : [
+          `Moedas ganhas: +${this.summary.coinsEarned}`,
+          `Total de moedas: ${profile.currency}`,
+        ]),
     ];
 
     lines.forEach((line, i) => {

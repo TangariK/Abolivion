@@ -2,12 +2,17 @@ import Phaser from 'phaser';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config/GameConfig';
 import { GameSettingsStore, type PlayerCount } from '../data/GameModeStore';
 import type { GameModeId, Profile } from '../data/types';
+import { AuthService } from '../services/AuthService';
+import { AchievementToast } from '../ui/AchievementToast';
+import { FreeModeSetupOverlay } from '../ui/FreeModeSetupOverlay';
+import { ProfileOverlay } from '../ui/ProfileOverlay';
 import { SaveManager } from '../upgrades/MetaUpgrades';
 import { META_UPGRADE_DEFS, metaCost, tryBuyMeta } from '../upgrades/MetaShop';
 
 const MODE_LABELS: Record<GameModeId, string> = {
   infinite: 'Infinito',
   waves: 'Rodadas',
+  free: 'Livre',
   story: 'História',
 };
 
@@ -23,6 +28,13 @@ export class MenuScene extends Phaser.Scene {
   private dropdownBlocker?: Phaser.GameObjects.Rectangle;
   private closingDropdown = false;
   private coopHint?: Phaser.GameObjects.Container;
+  private profileButtonLabel!: Phaser.GameObjects.Text;
+  private profileSilhouette!: Phaser.GameObjects.Graphics;
+  private guestHint!: Phaser.GameObjects.Text;
+  private profileOverlay = new ProfileOverlay();
+  private freeSetup = new FreeModeSetupOverlay();
+  private toasts!: AchievementToast;
+  private unsubAuth?: () => void;
 
   constructor() {
     super('MenuScene');
@@ -30,6 +42,7 @@ export class MenuScene extends Phaser.Scene {
 
   create(): void {
     this.profile = SaveManager.load();
+    this.toasts = new AchievementToast(this);
     this.cameras.main.setBackgroundColor(COLORS.bg);
 
     const g = this.add.graphics();
@@ -63,15 +76,95 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.refreshCoins();
+    this.buildProfileButton();
     this.buildShop();
     this.buildModeSelector();
     this.buildPlayersSelector();
     this.buildStartButton();
     this.buildAlmanacButton();
+
+    this.unsubAuth = AuthService.onChange(() => {
+      this.profile = SaveManager.load();
+      this.refreshCoins();
+      this.refreshProfileButton();
+    });
+    this.events.once('shutdown', () => {
+      this.unsubAuth?.();
+      this.profileOverlay.close();
+      this.freeSetup.close();
+    });
   }
 
   private refreshCoins(): void {
     this.coinsText.setText(`Moedas: ${this.profile.currency}`);
+    if (this.profile.currency >= 200) {
+      if (SaveManager.unlockAchievement('deep_pockets')) {
+        this.toasts.enqueue('deep_pockets');
+      }
+    }
+  }
+
+  private buildProfileButton(): void {
+    const x = GAME_WIDTH - 110;
+    const y = 42;
+    const bg = this.add
+      .circle(x, y, 28, 0x2a2417)
+      .setStrokeStyle(2, COLORS.accent)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(40);
+
+    this.profileButtonLabel = this.add
+      .text(x, y, '', {
+        fontFamily: 'Georgia, "Times New Roman", serif',
+        fontSize: '22px',
+        color: '#f4d77b',
+      })
+      .setOrigin(0.5)
+      .setDepth(41);
+
+    // Silhueta de perfil para quando estiver deslogado
+    this.profileSilhouette = this.add.graphics().setDepth(41);
+    this.profileSilhouette.fillStyle(0xf4d77b, 0.85);
+    this.profileSilhouette.fillCircle(x, y - 7, 7);
+    this.profileSilhouette.fillEllipse(x, y + 10, 26, 16);
+
+    this.guestHint = this.add
+      .text(x, y + 40, '', {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '11px',
+        color: '#d4b86a',
+        align: 'center',
+        wordWrap: { width: 160 },
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(41);
+
+    bg.on('pointerover', () => bg.setFillStyle(0x3b3220));
+    bg.on('pointerout', () => bg.setFillStyle(0x2a2417));
+    bg.on('pointerup', () => {
+      this.profileOverlay.open((result) => {
+        this.profile = SaveManager.load();
+        this.refreshCoins();
+        this.refreshProfileButton();
+        if (result.unlockedLoginAchievement) {
+          this.toasts.enqueue('tribe_member');
+        }
+      });
+    });
+
+    this.refreshProfileButton();
+  }
+
+  private refreshProfileButton(): void {
+    const logged = AuthService.isLoggedIn();
+    const name = AuthService.displayName();
+    this.profileButtonLabel.setText(logged ? name.slice(0, 1).toUpperCase() : '');
+    this.profileSilhouette.setVisible(!logged);
+    this.guestHint.setText(
+      logged
+        ? name
+        : 'Convidado — progresso em cache',
+    );
   }
 
   private buildModeSelector(): void {
@@ -209,7 +302,7 @@ export class MenuScene extends Phaser.Scene {
     // Open upward, clear of Começar / Marã
     this.dropdown = this.add.container(x, y - 28).setDepth(60);
     const panel = this.add
-      .rectangle(0, -70, 240, 140, 0x141c16, 0.98)
+      .rectangle(0, -95, 240, 182, 0x141c16, 0.98)
       .setStrokeStyle(2, COLORS.accent)
       .setInteractive();
     this.dropdown.add(panel);
@@ -217,11 +310,12 @@ export class MenuScene extends Phaser.Scene {
     const options: Array<{ id: GameModeId; locked?: boolean }> = [
       { id: 'infinite' },
       { id: 'waves' },
+      { id: 'free' },
       { id: 'story', locked: true },
     ];
 
     options.forEach((opt, i) => {
-      const oy = -116 + i * 44;
+      const oy = -160 + i * 44;
       const selected = !opt.locked && GameSettingsStore.getMode() === opt.id;
       const bg = this.add
         .rectangle(0, oy, 220, 38, selected ? 0x3b3220 : 0x1a2a1e)
@@ -341,7 +435,20 @@ export class MenuScene extends Phaser.Scene {
 
     btn.on('pointerover', () => btn.setFillStyle(0xd4b86a));
     btn.on('pointerout', () => btn.setFillStyle(COLORS.accent));
-    btn.on('pointerdown', () => this.scene.start('GameScene'));
+    btn.on('pointerdown', () => {
+      if (GameSettingsStore.getMode() === 'free') {
+        this.freeSetup.open(
+          SaveManager.load(),
+          (config) => {
+            GameSettingsStore.setFreeConfig(config);
+            this.scene.start('GameScene');
+          },
+          () => {},
+        );
+        return;
+      }
+      this.scene.start('GameScene');
+    });
   }
 
   private buildAlmanacButton(): void {

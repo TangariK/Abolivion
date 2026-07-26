@@ -7,9 +7,13 @@ import type {
   Profile,
   RunUpgradeId,
 } from '../data/types';
+import { ENEMY_DEFS } from '../data/EnemyCatalog';
+import { GameSettingsStore } from '../data/GameModeStore';
 
 const SAVE_KEY = 'abolivion_profile_v1';
-const PROFILE_VERSION = 3;
+const PROFILE_VERSION = 4;
+
+export type SaveOptions = { skipCloud?: boolean };
 
 function emptyAlmanac(): Profile['almanac'] {
   return {
@@ -18,6 +22,21 @@ function emptyAlmanac(): Profile['almanac'] {
     upgrades: [],
     bosses: [],
     achievements: [],
+  };
+}
+
+function emptyBestScores(): NonNullable<Profile['bestScores']> {
+  return {
+    infiniteMs: 0,
+    wavesReached: 0,
+    kills: 0,
+    bestLevel: 1,
+    totalPlayMs: 0,
+    bestKillStreak: 0,
+    bossesDefeated: 0,
+    totalCoinsEarned: 0,
+    lowestHpSurvive: 0,
+    bestAccuracy: 0,
   };
 }
 
@@ -32,6 +51,8 @@ function defaultProfile(): Profile {
       fireRate: 0,
     },
     almanac: emptyAlmanac(),
+    bestScores: emptyBestScores(),
+    prefs: { showNameTag: false },
   };
 }
 
@@ -54,6 +75,21 @@ function normalizeProfile(parsed: Partial<Profile>): Profile {
         ? parsed.almanac.achievements
         : [],
     },
+    bestScores: {
+      infiniteMs: Math.max(0, parsed.bestScores?.infiniteMs ?? 0),
+      wavesReached: Math.max(0, parsed.bestScores?.wavesReached ?? 0),
+      kills: Math.max(0, parsed.bestScores?.kills ?? 0),
+      bestLevel: Math.max(1, parsed.bestScores?.bestLevel ?? 1),
+      totalPlayMs: Math.max(0, parsed.bestScores?.totalPlayMs ?? 0),
+      bestKillStreak: Math.max(0, parsed.bestScores?.bestKillStreak ?? 0),
+      bossesDefeated: Math.max(0, parsed.bestScores?.bossesDefeated ?? 0),
+      totalCoinsEarned: Math.max(0, parsed.bestScores?.totalCoinsEarned ?? 0),
+      lowestHpSurvive: Math.max(0, parsed.bestScores?.lowestHpSurvive ?? 0),
+      bestAccuracy: Math.max(0, parsed.bestScores?.bestAccuracy ?? 0),
+    },
+    prefs: {
+      showNameTag: parsed.prefs?.showNameTag ?? false,
+    },
   };
 }
 
@@ -70,11 +106,19 @@ export class SaveManager {
     }
   }
 
-  static save(profile: Profile): void {
+  static save(profile: Profile, options: SaveOptions = {}): void {
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(profile));
     } catch {
       // private mode / quota
+    }
+    if (!options.skipCloud) {
+      void import('../services/AuthService').then(({ AuthService }) => {
+        if (!AuthService.isLoggedIn()) return;
+        void import('../services/CloudSync').then(({ scheduleCloudSync }) => {
+          scheduleCloudSync(AuthService.getUser()?.id ?? null);
+        });
+      });
     }
   }
 
@@ -82,6 +126,7 @@ export class SaveManager {
     const profile = this.load();
     profile.currency += Math.max(0, amount);
     this.save(profile);
+    if (profile.currency >= 200) this.unlockAchievement('deep_pockets');
     return profile;
   }
 
@@ -92,8 +137,56 @@ export class SaveManager {
     return profile;
   }
 
+  static recordRunStats(stats: {
+    survivalMs: number;
+    kills: number;
+    level: number;
+    mode: 'infinite' | 'waves' | 'story';
+    waveReached?: number;
+    coinsEarned?: number;
+    killStreak?: number;
+    bossesDefeated?: number;
+    lowestHpSurvive?: number;
+    accuracy?: number;
+  }): void {
+    const profile = this.load();
+    const best = profile.bestScores ?? emptyBestScores();
+    if (stats.mode === 'infinite') {
+      best.infiniteMs = Math.max(best.infiniteMs, stats.survivalMs);
+    }
+    if (stats.mode === 'waves' && stats.waveReached !== undefined) {
+      best.wavesReached = Math.max(best.wavesReached, stats.waveReached);
+    }
+    best.kills = Math.max(best.kills, stats.kills);
+    best.bestLevel = Math.max(best.bestLevel ?? 1, stats.level);
+    best.totalPlayMs = (best.totalPlayMs ?? 0) + Math.max(0, stats.survivalMs);
+    best.totalCoinsEarned = (best.totalCoinsEarned ?? 0) + Math.max(0, stats.coinsEarned ?? 0);
+    if (stats.killStreak !== undefined) {
+      best.bestKillStreak = Math.max(best.bestKillStreak ?? 0, stats.killStreak);
+    }
+    if (stats.bossesDefeated !== undefined) {
+      best.bossesDefeated = (best.bossesDefeated ?? 0) + Math.max(0, stats.bossesDefeated);
+    }
+    if (stats.lowestHpSurvive !== undefined && stats.lowestHpSurvive > 0) {
+      const prev = best.lowestHpSurvive ?? 0;
+      best.lowestHpSurvive = prev > 0
+        ? Math.min(prev, stats.lowestHpSurvive)
+        : stats.lowestHpSurvive;
+    }
+    if (stats.accuracy !== undefined && stats.accuracy > 0) {
+      best.bestAccuracy = Math.max(best.bestAccuracy ?? 0, stats.accuracy);
+    }
+    profile.bestScores = best;
+    this.save(profile);
+  }
+
   static discoverEnemy(id: EnemyType): void {
     this.discover('enemies', id);
+    const profile = this.load();
+    const all = Object.keys(ENEMY_DEFS) as EnemyType[];
+    if (all.every((type) => profile.almanac.enemies.includes(type))) {
+      this.unlockAchievement('full_bestiary');
+    }
   }
 
   static discoverAmulet(id: AmuletId): void {
@@ -120,10 +213,21 @@ export class SaveManager {
     return this.load().almanac.achievements.includes(id);
   }
 
+  /** Zera progresso de jogo (moedas, meta, Marã, recordes). Mantém prefs locais. */
+  static resetProgress(): Profile {
+    const prefs = this.load().prefs;
+    const fresh = defaultProfile();
+    fresh.prefs = prefs ?? { showNameTag: false };
+    this.save(fresh);
+    return fresh;
+  }
+
   private static discover(
     category: keyof Profile['almanac'],
     id: EnemyType | AmuletId | RunUpgradeId | BossId | AchievementId,
   ): void {
+    // Modo Livre é sandbox: nada novo entra no Marã
+    if (GameSettingsStore.getMode() === 'free') return;
     const profile = this.load();
     const entries = profile.almanac[category] as string[];
     if (entries.includes(id)) return;

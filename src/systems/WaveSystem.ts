@@ -23,6 +23,8 @@ export class WaveSystem {
   private onBossSpawn: (id: BossId) => void;
   private onWaveCleared: (wave: number) => void;
 
+  private singleWave = false;
+
   constructor(
     scene: Phaser.Scene,
     player: Player,
@@ -31,12 +33,15 @@ export class WaveSystem {
       onBossSpawn: (id: BossId) => void;
       onWaveCleared: (wave: number) => void;
     },
+    options?: { startWave?: number; singleWave?: boolean },
   ) {
     this.scene = scene;
     this.player = player;
     this.onEncounter = hooks.onEncounter;
     this.onBossSpawn = hooks.onBossSpawn;
     this.onWaveCleared = hooks.onWaveCleared;
+    if (options?.startWave && options.startWave > 1) this.wave = options.startWave - 1;
+    this.singleWave = options?.singleWave ?? false;
     this.enemies = scene.physics.add.group({
       classType: Enemy,
       maxSize: 250,
@@ -72,7 +77,7 @@ export class WaveSystem {
       && this.scene.time.now - this.combatStartedAt > 250
     ) {
       const cleared = this.wave;
-      this.phase = 'break';
+      this.phase = this.singleWave ? 'idle' : 'break';
       this.intermissionMs = 5000;
       this.activeBossId = undefined;
       this.onWaveCleared(cleared);
