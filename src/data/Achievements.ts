@@ -36,6 +36,16 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: 'Sábio da Floresta',
     description: 'Escolha o buff Colheita Abundante.',
   },
+  {
+    id: 'partners_of_night',
+    name: 'Parceiros da Noite',
+    description: 'Sobreviva 2 minutos em uma run com 2 jogadores.',
+  },
+  {
+    id: 'storm_touched',
+    name: 'Tocado pela Tempestade',
+    description: 'Desperte o amuleto Tempestade de Tupã.',
+  },
 ];
 
 export function getAchievement(id: AchievementId): AchievementDef {

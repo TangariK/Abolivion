@@ -4,6 +4,7 @@ import { COLORS } from '../config/GameConfig';
 export class ShapeFactory {
   static createAll(scene: Phaser.Scene): void {
     this.circle(scene, 'player', 28, COLORS.player);
+    this.circle(scene, 'player2', 28, 0x5ce0a0);
     this.circle(scene, 'enemy_fast', 18, COLORS.enemyFast);
     this.circle(scene, 'enemy_normal', 24, COLORS.enemyNormal);
     this.circle(scene, 'enemy_tank', 36, COLORS.enemyTank);
@@ -23,6 +24,8 @@ export class ShapeFactory {
     this.amuletIcon(scene, 'amulet_guara', 0x9aa0a6, 'paw');
     this.amuletIcon(scene, 'amulet_yara', 0x6ec8ff, 'drop');
     this.amuletIcon(scene, 'amulet_cuca', 0xc45a3a, 'thorn');
+    this.amuletIcon(scene, 'amulet_caipora', 0xb8d44a, 'echo');
+    this.amuletIcon(scene, 'amulet_storm', 0x7ec8ff, 'storm');
     this.hut(scene, 'hut', 80, 64);
     this.rect(scene, 'ground_tile', 64, 64, COLORS.grass);
   }
@@ -68,7 +71,7 @@ export class ShapeFactory {
     scene: Phaser.Scene,
     key: string,
     color: number,
-    motif: 'parallel' | 'diagonal' | 'ring' | 'bolt' | 'paw' | 'drop' | 'thorn',
+    motif: 'parallel' | 'diagonal' | 'ring' | 'bolt' | 'paw' | 'drop' | 'thorn' | 'echo' | 'storm',
   ): void {
     if (scene.textures.exists(key)) return;
     const size = 96;
@@ -117,6 +120,19 @@ export class ShapeFactory {
         g.fillTriangle(cx, cy - 22, cx - 10, cy + 8, cx + 10, cy + 8);
         g.fillTriangle(cx - 18, cy - 4, cx - 4, cy + 18, cx - 10, cy + 4);
         g.fillTriangle(cx + 18, cy - 4, cx + 4, cy + 18, cx + 10, cy + 4);
+        break;
+      case 'echo':
+        g.fillCircle(cx, cy - 14, 7);
+        g.fillCircle(cx, cy + 14, 7);
+        g.lineStyle(4, 0x0d1a12, 1);
+        g.lineBetween(cx, cy - 6, cx, cy + 6);
+        break;
+      case 'storm':
+        g.fillTriangle(cx - 4, cy - 24, cx - 16, cy + 2, cx + 2, cy + 2);
+        g.fillTriangle(cx + 2, cy - 4, cx + 16, cy - 4, cx - 2, cy + 24);
+        g.fillStyle(0xffe8a3, 0.9);
+        g.fillCircle(cx + 18, cy - 18, 5);
+        g.fillCircle(cx - 20, cy + 10, 4);
         break;
     }
 

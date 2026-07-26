@@ -19,6 +19,23 @@ _Mudanças em desenvolvimento, ainda sem número de versão._
 
 ---
 
+## [0.1.3] — 2026-07-25
+
+### Adicionado
+
+- Seletor 1/2 jogadores no menu, com aviso de controles no modo coop
+- Coop local: P1 WASD+IJKL, P2 setas com mira automática
+- Amuleto Eco de Caipora (☽): tiro para trás
+- Amuleto Tempestade de Tupã (☽☽☽☽): raios aleatórios de alto dano
+- Conquistas Parceiros da Noite e Tocado pela Tempestade
+- Card lateral ao desbloquear conquista durante a run
+
+### Detalhamento
+
+Ver [`docs/versions/0.1.3.md`](docs/versions/0.1.3.md).
+
+---
+
 ## [0.1.2] — 2026-07-25
 
 ### Adicionado
@@ -93,7 +110,8 @@ Ver snapshot completo em [`docs/versions/0.1.0.md`](docs/versions/0.1.0.md).
 
 ---
 
-[Unreleased]: https://github.com/TangariK/Abolivion/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/TangariK/Abolivion/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/TangariK/Abolivion/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/TangariK/Abolivion/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/TangariK/Abolivion/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/TangariK/Abolivion/releases/tag/v0.1.0

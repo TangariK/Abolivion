@@ -4,7 +4,7 @@ Roguelite top-down (estilo *Vampire Survivors*), feito com **TypeScript**, **Pha
 
 **Jogue no navegador:** [Game Jolt — Abolivion](https://gamejolt.com/games/abolivion/1086828)
 
-**Versão atual:** `0.1.2` — ver [CHANGELOG](CHANGELOG.md) e [docs/versions/0.1.2.md](docs/versions/0.1.2.md)
+**Versão atual:** `0.1.3` — ver [CHANGELOG](CHANGELOG.md) e [docs/versions/0.1.3.md](docs/versions/0.1.3.md)
 
 ---
 
@@ -18,9 +18,11 @@ Você controla um pequeno índio em uma tribo abandonada. Toda noite, centenas d
 
 | Controle | Ação |
 |----------|------|
-| **W A S D** / **Setas** | Movimento |
-| **Mouse** | Mira (tiro automático) |
+| **W A S D** / **Setas** | Movimento (1P) |
+| **Mouse** | Mira (1P) |
 | **Esc** | Pausar / continuar |
+| **2P — P1** | WASD move · IJKL mira |
+| **2P — P2** | Setas move · mira automática |
 
 ### Loop
 

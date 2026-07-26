@@ -65,6 +65,24 @@ export const AMULETS: AmuletDef[] = [
     rarity: 3,
     textureKey: 'amulet_cuca',
   },
+  {
+    id: 'caipora_echo',
+    name: 'Eco de Caipora',
+    description: 'Também dispara um projétil para trás.',
+    lore: 'Caipora ri por trás das árvores: o golpe que foge encontra outro caminho.',
+    symbol: '↔',
+    rarity: 1,
+    textureKey: 'amulet_caipora',
+  },
+  {
+    id: 'tupa_storm',
+    name: 'Tempestade de Tupã',
+    description: 'Raios caem no mapa e destroem inimigos aleatórios.',
+    lore: 'O céu se abre em fúria. Onde o trovão escolhe cair, a noite se parte.',
+    symbol: '⚡',
+    rarity: 4,
+    textureKey: 'amulet_storm',
+  },
 ];
 
 const RARITY_WEIGHT: Record<MoonRarity, number> = {

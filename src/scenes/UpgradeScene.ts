@@ -8,18 +8,22 @@ import { pickRandomUpgrades } from '../upgrades/RunUpgrades';
 
 interface UpgradeData {
   player: Player;
+  players: Player[];
   mode: 'upgrade' | 'amulet';
   ownedAmulets: AmuletId[];
   onAmuletSelected: (id: AmuletId) => void;
   onComplete: () => void;
+  onAchievement?: (id: 'xp_scholar') => void;
 }
 
 export class UpgradeScene extends Phaser.Scene {
   private player!: Player;
+  private players: Player[] = [];
   private mode: 'upgrade' | 'amulet' = 'upgrade';
   private ownedAmulets: AmuletId[] = [];
   private onAmuletSelected!: (id: AmuletId) => void;
   private onComplete!: () => void;
+  private onAchievement?: (id: 'xp_scholar') => void;
 
   constructor() {
     super('UpgradeScene');
@@ -27,10 +31,12 @@ export class UpgradeScene extends Phaser.Scene {
 
   init(data: UpgradeData): void {
     this.player = data.player;
+    this.players = data.players?.length ? data.players : [data.player];
     this.mode = data.mode;
     this.ownedAmulets = data.ownedAmulets ?? [];
     this.onAmuletSelected = data.onAmuletSelected;
     this.onComplete = data.onComplete;
+    this.onAchievement = data.onAchievement;
   }
 
   create(): void {
@@ -104,9 +110,17 @@ export class UpgradeScene extends Phaser.Scene {
       card.on('pointerover', () => card.setFillStyle(0x243528, 0.98));
       card.on('pointerout', () => card.setFillStyle(COLORS.cardBg, 0.98));
       card.on('pointerdown', () => {
-        this.player.applyUpgrade(upgrade.apply);
+        for (const p of this.players) {
+          if (!p.isDead()) p.applyUpgrade(upgrade.apply);
+          else p.applyUpgrade(upgrade.apply); // keep dead players' max stats updated too
+        }
+        // Ensure shared baseline from P1
+        const base = this.player.stats;
+        for (const p of this.players) {
+          if (p !== this.player) p.syncStatsFrom(base);
+        }
         SaveManager.discoverUpgrade(upgrade.id);
-        if (upgrade.id === 'xp_gain') SaveManager.unlockAchievement('xp_scholar');
+        if (upgrade.id === 'xp_gain') this.onAchievement?.('xp_scholar');
         this.finish();
       });
     });

@@ -27,7 +27,9 @@ export type AmuletId =
   | 'tupa_breath'
   | 'guara_tooth'
   | 'yara_tear'
-  | 'cuca_thorn';
+  | 'cuca_thorn'
+  | 'caipora_echo'
+  | 'tupa_storm';
 
 export type AchievementId =
   | 'first_blood'
@@ -36,7 +38,9 @@ export type AchievementId =
   | 'wave_survivor'
   | 'boss_slayer'
   | 'thorn_revenge'
-  | 'xp_scholar';
+  | 'xp_scholar'
+  | 'partners_of_night'
+  | 'storm_touched';
 
 /** Moon rarity for amulets: 1 (common) .. 5 (mythic) */
 export type MoonRarity = 1 | 2 | 3 | 4 | 5;
@@ -113,6 +117,8 @@ export interface RunAmuletState {
   dogCompanion: boolean;
   lifeRegen: boolean;
   thorns: boolean;
+  backwardShot: boolean;
+  lightningStorm: boolean;
 }
 
 export type MetaUpgradeId = 'maxHp' | 'speed' | 'damage' | 'fireRate';

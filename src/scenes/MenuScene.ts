@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config/GameConfig';
-import { GameModeStore } from '../data/GameModeStore';
+import { GameSettingsStore, type PlayerCount } from '../data/GameModeStore';
 import type { GameModeId, Profile } from '../data/types';
 import { SaveManager } from '../upgrades/MetaUpgrades';
 import { META_UPGRADE_DEFS, metaCost, tryBuyMeta } from '../upgrades/MetaShop';
@@ -17,9 +17,12 @@ export class MenuScene extends Phaser.Scene {
   private shopContainer!: Phaser.GameObjects.Container;
   private modeButton!: Phaser.GameObjects.Rectangle;
   private modeButtonLabel!: Phaser.GameObjects.Text;
+  private playersButton!: Phaser.GameObjects.Rectangle;
+  private playersButtonLabel!: Phaser.GameObjects.Text;
   private dropdown?: Phaser.GameObjects.Container;
   private dropdownBlocker?: Phaser.GameObjects.Rectangle;
   private closingDropdown = false;
+  private coopHint?: Phaser.GameObjects.Container;
 
   constructor() {
     super('MenuScene');
@@ -62,6 +65,7 @@ export class MenuScene extends Phaser.Scene {
     this.refreshCoins();
     this.buildShop();
     this.buildModeSelector();
+    this.buildPlayersSelector();
     this.buildStartButton();
     this.buildAlmanacButton();
   }
@@ -71,7 +75,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private buildModeSelector(): void {
-    const x = GAME_WIDTH / 2;
+    const x = GAME_WIDTH / 2 - 160;
     const y = GAME_HEIGHT - 175;
 
     this.add
@@ -83,15 +87,15 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.modeButton = this.add
-      .rectangle(x, y, 280, 42, 0x2a2417)
+      .rectangle(x, y, 240, 42, 0x2a2417)
       .setStrokeStyle(2, COLORS.accent)
       .setInteractive({ useHandCursor: true })
       .setDepth(20);
 
     this.modeButtonLabel = this.add
-      .text(x, y, `${MODE_LABELS[GameModeStore.get()]}  ▾`, {
+      .text(x, y, `${MODE_LABELS[GameSettingsStore.getMode()]}  ▾`, {
         fontFamily: 'Georgia, "Times New Roman", serif',
-        fontSize: '18px',
+        fontSize: '17px',
         color: '#f4d77b',
       })
       .setOrigin(0.5)
@@ -100,6 +104,77 @@ export class MenuScene extends Phaser.Scene {
     this.modeButton.on('pointerup', () => {
       if (this.closingDropdown) return;
       this.toggleDropdown(x, y);
+    });
+  }
+
+  private buildPlayersSelector(): void {
+    const x = GAME_WIDTH / 2 + 160;
+    const y = GAME_HEIGHT - 175;
+
+    this.add
+      .text(x, y - 32, 'Jogadores', {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '14px',
+        color: '#a8c0a8',
+      })
+      .setOrigin(0.5);
+
+    this.playersButton = this.add
+      .rectangle(x, y, 240, 42, 0x2a2417)
+      .setStrokeStyle(2, COLORS.accent)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(20);
+
+    this.playersButtonLabel = this.add
+      .text(x, y, this.playersLabel(GameSettingsStore.getPlayerCount()), {
+        fontFamily: 'Georgia, "Times New Roman", serif',
+        fontSize: '17px',
+        color: '#f4d77b',
+      })
+      .setOrigin(0.5)
+      .setDepth(21);
+
+    this.playersButton.on('pointerup', () => {
+      const next: PlayerCount = GameSettingsStore.getPlayerCount() === 1 ? 2 : 1;
+      GameSettingsStore.setPlayerCount(next);
+      this.playersButtonLabel.setText(this.playersLabel(next));
+      if (next === 2) this.showCoopHint();
+      else this.coopHint?.destroy(true);
+    });
+  }
+
+  private playersLabel(count: PlayerCount): string {
+    return count === 1 ? '1 Jogador' : '2 Jogadores';
+  }
+
+  private showCoopHint(): void {
+    this.coopHint?.destroy(true);
+    const bg = this.add
+      .rectangle(0, 0, 520, 78, 0x1a2a1e, 0.96)
+      .setStrokeStyle(2, COLORS.accent);
+    const title = this.add
+      .text(0, -18, 'Modo 2 Jogadores', {
+        fontFamily: 'Georgia, "Times New Roman", serif',
+        fontSize: '18px',
+        color: '#f4d77b',
+      })
+      .setOrigin(0.5);
+    const body = this.add
+      .text(0, 12, 'P1: WASD move · IJKL mira\nP2: Setas para mover (mira automática)', {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '14px',
+        color: '#e8f0e8',
+        align: 'center',
+      })
+      .setOrigin(0.5);
+
+    this.coopHint = this.add
+      .container(GAME_WIDTH / 2, GAME_HEIGHT - 250, [bg, title, body])
+      .setDepth(80);
+
+    this.time.delayedCall(4500, () => {
+      this.coopHint?.destroy(true);
+      this.coopHint = undefined;
     });
   }
 
@@ -134,7 +209,7 @@ export class MenuScene extends Phaser.Scene {
     // Open upward, clear of Começar / Marã
     this.dropdown = this.add.container(x, y - 28).setDepth(60);
     const panel = this.add
-      .rectangle(0, -70, 280, 140, 0x141c16, 0.98)
+      .rectangle(0, -70, 240, 140, 0x141c16, 0.98)
       .setStrokeStyle(2, COLORS.accent)
       .setInteractive();
     this.dropdown.add(panel);
@@ -147,9 +222,9 @@ export class MenuScene extends Phaser.Scene {
 
     options.forEach((opt, i) => {
       const oy = -116 + i * 44;
-      const selected = !opt.locked && GameModeStore.get() === opt.id;
+      const selected = !opt.locked && GameSettingsStore.getMode() === opt.id;
       const bg = this.add
-        .rectangle(0, oy, 260, 38, selected ? 0x3b3220 : 0x1a2a1e)
+        .rectangle(0, oy, 220, 38, selected ? 0x3b3220 : 0x1a2a1e)
         .setStrokeStyle(1, selected ? COLORS.accent : COLORS.cardBorder)
         .setInteractive({ useHandCursor: !opt.locked });
       const label = this.add
@@ -168,7 +243,7 @@ export class MenuScene extends Phaser.Scene {
           if (bg.active) bg.setFillStyle(selected ? 0x3b3220 : 0x1a2a1e);
         });
         bg.on('pointerup', () => {
-          GameModeStore.set(opt.id);
+          GameSettingsStore.setMode(opt.id);
           this.modeButtonLabel.setText(`${MODE_LABELS[opt.id]}  ▾`);
           this.closeDropdown();
         });

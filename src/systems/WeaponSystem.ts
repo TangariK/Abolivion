@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import { Projectile } from '../entities/Projectile';
 
@@ -10,15 +11,19 @@ export class WeaponSystem {
   private currentDelay = 400;
   private parallelShot = false;
   private diagonalShot = false;
+  private backwardShot = false;
+  private getAimAngle: () => number;
 
-  constructor(scene: Phaser.Scene, player: Player) {
+  constructor(
+    scene: Phaser.Scene,
+    player: Player,
+    projectiles: Phaser.Physics.Arcade.Group,
+    getAimAngle: () => number,
+  ) {
     this.scene = scene;
     this.player = player;
-    this.projectiles = scene.physics.add.group({
-      classType: Projectile,
-      maxSize: 240,
-      runChildUpdate: true,
-    });
+    this.projectiles = projectiles;
+    this.getAimAngle = getAimAngle;
   }
 
   enableParallelShot(): void {
@@ -29,12 +34,15 @@ export class WeaponSystem {
     this.diagonalShot = true;
   }
 
+  enableBackwardShot(): void {
+    this.backwardShot = true;
+  }
+
   start(): void {
     this.currentDelay = this.player.stats.fireRate;
     this.scheduleFire();
   }
 
-  /** Call when fireRate changes (e.g. after upgrade) */
   refreshRate(): void {
     if (this.player.stats.fireRate === this.currentDelay) return;
     this.currentDelay = this.player.stats.fireRate;
@@ -53,15 +61,14 @@ export class WeaponSystem {
   private fire(): void {
     if (!this.player.active || this.player.isDead()) return;
 
-    const pointer = this.scene.input.activePointer;
-    const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    const angle = Phaser.Math.Angle.Between(
-      this.player.x,
-      this.player.y,
-      worldPoint.x,
-      worldPoint.y,
-    );
+    const angle = this.getAimAngle();
+    this.firePattern(angle);
+    if (this.backwardShot) {
+      this.spawnProjectile(this.player.x, this.player.y, angle + Math.PI);
+    }
+  }
 
+  private firePattern(angle: number): void {
     if (!this.parallelShot && !this.diagonalShot) {
       this.spawnProjectile(this.player.x, this.player.y, angle);
       return;
@@ -91,6 +98,22 @@ export class WeaponSystem {
       this.player.stats.projectileSpeed,
       this.player.stats.damage,
     );
+  }
+
+  /** Auto-aim helper for player 2 */
+  static aimAtNearest(player: Player, enemies: Phaser.Physics.Arcade.Group): number {
+    let best: Enemy | undefined;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (const enemy of enemies.getChildren() as Enemy[]) {
+      if (!enemy.active) continue;
+      const d = Phaser.Math.Distance.Squared(player.x, player.y, enemy.x, enemy.y);
+      if (d < bestDist) {
+        bestDist = d;
+        best = enemy;
+      }
+    }
+    if (!best) return player.aimAngle;
+    return Phaser.Math.Angle.Between(player.x, player.y, best.x, best.y);
   }
 
   destroy(): void {
