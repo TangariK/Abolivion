@@ -8,15 +8,25 @@ export class WeaponSystem {
   projectiles: Phaser.Physics.Arcade.Group;
   private fireTimer?: Phaser.Time.TimerEvent;
   private currentDelay = 400;
+  private parallelShot = false;
+  private diagonalShot = false;
 
   constructor(scene: Phaser.Scene, player: Player) {
     this.scene = scene;
     this.player = player;
     this.projectiles = scene.physics.add.group({
       classType: Projectile,
-      maxSize: 120,
+      maxSize: 240,
       runChildUpdate: true,
     });
+  }
+
+  enableParallelShot(): void {
+    this.parallelShot = true;
+  }
+
+  enableDiagonalShot(): void {
+    this.diagonalShot = true;
   }
 
   start(): void {
@@ -52,16 +62,31 @@ export class WeaponSystem {
       worldPoint.y,
     );
 
-    const proj = this.projectiles.get(
-      this.player.x,
-      this.player.y,
-      'projectile',
-    ) as Projectile | null;
+    if (!this.parallelShot && !this.diagonalShot) {
+      this.spawnProjectile(this.player.x, this.player.y, angle);
+      return;
+    }
 
-    if (!proj) return;
-    proj.fire(
-      this.player.x,
-      this.player.y,
+    if (this.parallelShot) {
+      const perpendicular = angle + Math.PI / 2;
+      const offsetX = Math.cos(perpendicular) * 10;
+      const offsetY = Math.sin(perpendicular) * 10;
+      this.spawnProjectile(this.player.x + offsetX, this.player.y + offsetY, angle);
+      this.spawnProjectile(this.player.x - offsetX, this.player.y - offsetY, angle);
+    }
+
+    if (this.diagonalShot) {
+      this.spawnProjectile(this.player.x, this.player.y, angle - 0.22);
+      this.spawnProjectile(this.player.x, this.player.y, angle + 0.22);
+    }
+  }
+
+  private spawnProjectile(x: number, y: number, angle: number): void {
+    const projectile = this.projectiles.get(x, y, 'projectile') as Projectile | null;
+    if (!projectile) return;
+    projectile.fire(
+      x,
+      y,
       angle,
       this.player.stats.projectileSpeed,
       this.player.stats.damage,

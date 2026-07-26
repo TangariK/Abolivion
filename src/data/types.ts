@@ -1,4 +1,18 @@
 export type EnemyType = 'fast' | 'normal' | 'tank';
+export type RunUpgradeId =
+  | 'hp_up'
+  | 'heal'
+  | 'speed_up'
+  | 'damage_up'
+  | 'fire_rate'
+  | 'proj_speed';
+
+export type AmuletId =
+  | 'araci_eyes'
+  | 'jaci_claws'
+  | 'anhanga_circle'
+  | 'tupa_breath'
+  | 'guara_tooth';
 
 export interface PlayerStats {
   maxHp: number;
@@ -21,10 +35,27 @@ export interface EnemyDef {
 }
 
 export interface RunUpgradeDef {
-  id: string;
+  id: RunUpgradeId;
   name: string;
   description: string;
   apply: (stats: PlayerStats) => void;
+}
+
+export interface AmuletDef {
+  id: AmuletId;
+  name: string;
+  description: string;
+  lore: string;
+  symbol: string;
+}
+
+export interface RunAmuletState {
+  owned: AmuletId[];
+  parallelShot: boolean;
+  diagonalShot: boolean;
+  damageAura: boolean;
+  reviveAvailable: boolean;
+  dogCompanion: boolean;
 }
 
 export type MetaUpgradeId = 'maxHp' | 'speed' | 'damage' | 'fireRate';
@@ -42,6 +73,11 @@ export interface Profile {
   version: number;
   currency: number;
   metaLevels: Record<MetaUpgradeId, number>;
+  almanac: {
+    enemies: EnemyType[];
+    amulets: AmuletId[];
+    upgrades: RunUpgradeId[];
+  };
 }
 
 export interface RunSummary {

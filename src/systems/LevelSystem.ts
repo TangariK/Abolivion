@@ -9,17 +9,17 @@ export class LevelSystem {
     return Math.floor(XP_CURVE.base * Math.pow(XP_CURVE.growth, this.level - 1));
   }
 
-  /** Returns number of levels gained */
-  addXp(amount: number): number {
+  /** Returns each level reached, preserving milestones when XP jumps levels. */
+  addXp(amount: number): number[] {
     this.xp += amount;
     this.totalXpCollected += amount;
-    let gained = 0;
+    const levelsReached: number[] = [];
     while (this.xp >= this.xpToNext()) {
       this.xp -= this.xpToNext();
       this.level += 1;
-      gained += 1;
+      levelsReached.push(this.level);
     }
-    return gained;
+    return levelsReached;
   }
 
   progress(): number {

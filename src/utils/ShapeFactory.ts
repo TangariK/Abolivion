@@ -9,6 +9,7 @@ export class ShapeFactory {
     this.circle(scene, 'enemy_tank', 36, COLORS.enemyTank);
     this.circle(scene, 'projectile', 10, COLORS.projectile);
     this.hexagon(scene, 'xp_orb', 12, COLORS.xpOrb);
+    this.circle(scene, 'dog_companion', 18, 0x9aa0a6);
     this.hut(scene, 'hut', 80, 64);
     this.rect(scene, 'ground_tile', 64, 64, COLORS.grass);
   }

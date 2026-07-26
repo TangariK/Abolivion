@@ -1,12 +1,13 @@
 {
   "name": "abolivion",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "pack:gamejolt": "npm run build && node scripts/pack-gamejolt.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"

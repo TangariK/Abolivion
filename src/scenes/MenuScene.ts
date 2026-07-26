@@ -51,6 +51,7 @@ export class MenuScene extends Phaser.Scene {
     this.refreshCoins();
     this.buildShop();
     this.buildStartButton();
+    this.buildAlmanacButton();
   }
 
   private refreshCoins(): void {
@@ -130,12 +131,14 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private buildStartButton(): void {
+    const x = GAME_WIDTH / 2 - 140;
+    const y = GAME_HEIGHT - 70;
     const btn = this.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 70, 260, 56, COLORS.accent, 1)
+      .rectangle(x, y, 250, 56, COLORS.accent, 1)
       .setInteractive({ useHandCursor: true });
 
     const label = this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT - 70, 'COMEÇAR', {
+      .text(x, y, 'COMEÇAR', {
         fontFamily: 'Georgia, "Times New Roman", serif',
         fontSize: '28px',
         color: '#0d1a12',
@@ -149,5 +152,26 @@ export class MenuScene extends Phaser.Scene {
     });
 
     label.setDepth(1);
+  }
+
+  private buildAlmanacButton(): void {
+    const x = GAME_WIDTH / 2 + 140;
+    const y = GAME_HEIGHT - 70;
+    const button = this.add
+      .rectangle(x, y, 250, 56, 0x2a2417, 1)
+      .setStrokeStyle(2, COLORS.accent)
+      .setInteractive({ useHandCursor: true });
+
+    this.add
+      .text(x, y, 'MARÃ', {
+        fontFamily: 'Georgia, "Times New Roman", serif',
+        fontSize: '26px',
+        color: '#f4d77b',
+      })
+      .setOrigin(0.5);
+
+    button.on('pointerover', () => button.setFillStyle(0x3b3220));
+    button.on('pointerout', () => button.setFillStyle(0x2a2417));
+    button.on('pointerdown', () => this.scene.launch('AlmanacScene'));
   }
 }

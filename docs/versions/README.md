@@ -4,6 +4,7 @@ Cada arquivo nesta pasta é um **snapshot** do jogo naquela release.
 
 | Versão | Data | Documento |
 |--------|------|-----------|
+| 0.1.1 | 2026-07-25 | [0.1.1.md](0.1.1.md) |
 | 0.1.0 | 2026-07-25 | [0.1.0.md](0.1.0.md) |
 
 Resumo cronológico: [CHANGELOG.md](../../CHANGELOG.md).

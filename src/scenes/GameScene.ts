@@ -5,7 +5,13 @@ import {
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config/GameConfig';
-import type { PlayerStats, RunSummary } from '../data/types';
+import type {
+  AmuletId,
+  PlayerStats,
+  RunAmuletState,
+  RunSummary,
+} from '../data/types';
+import { DogCompanion } from '../entities/DogCompanion';
 import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { Projectile } from '../entities/Projectile';
@@ -16,6 +22,7 @@ import { SpawnSystem } from '../systems/SpawnSystem';
 import { WeaponSystem } from '../systems/WeaponSystem';
 import { SaveManager } from '../upgrades/MetaUpgrades';
 import { applyMetaToStats } from '../upgrades/MetaShop';
+import { getAmulet } from '../upgrades/Amulets';
 
 export class GameScene extends Phaser.Scene {
   private player!: Player;
@@ -24,18 +31,23 @@ export class GameScene extends Phaser.Scene {
   private spawner!: SpawnSystem;
   private levelSystem!: LevelSystem;
   private xpOrbs!: Phaser.Physics.Arcade.Group;
+  private dog?: DogCompanion;
+  private auraVisual?: Phaser.GameObjects.Arc;
 
   private kills = 0;
   private runStart = 0;
-  private pendingLevelUps = 0;
+  private pendingChoices: Array<'upgrade' | 'amulet'> = [];
   private choosingUpgrade = false;
   private gameOverTriggered = false;
+  private nextAuraTick = 0;
+  private amulets: RunAmuletState = this.createEmptyAmuletState();
 
   private hpBarBg!: Phaser.GameObjects.Graphics;
   private hpBarFill!: Phaser.GameObjects.Graphics;
   private xpBarBg!: Phaser.GameObjects.Graphics;
   private xpBarFill!: Phaser.GameObjects.Graphics;
   private hudText!: Phaser.GameObjects.Text;
+  private amuletBadges!: Phaser.GameObjects.Container;
 
   constructor() {
     super('GameScene');
@@ -43,9 +55,12 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.kills = 0;
-    this.pendingLevelUps = 0;
+    this.pendingChoices = [];
     this.choosingUpgrade = false;
     this.gameOverTriggered = false;
+    this.amulets = this.createEmptyAmuletState();
+    this.dog = undefined;
+    this.nextAuraTick = 0;
     this.runStart = this.time.now;
     this.levelSystem = new LevelSystem();
 
@@ -78,7 +93,9 @@ export class GameScene extends Phaser.Scene {
     this.weapon = new WeaponSystem(this, this.player);
     this.weapon.start();
 
-    this.spawner = new SpawnSystem(this, this.player);
+    this.spawner = new SpawnSystem(this, this.player, (type) => {
+      SaveManager.discoverEnemy(type);
+    });
     this.spawner.start();
 
     this.xpOrbs = this.physics.add.group({
@@ -88,12 +105,6 @@ export class GameScene extends Phaser.Scene {
 
     this.setupCollisions();
     this.createHud();
-
-    this.events.on('resume', () => {
-      this.choosingUpgrade = false;
-      this.weapon.refreshRate();
-      this.processPendingLevelUps();
-    });
 
     this.events.once('shutdown', () => {
       this.weapon.destroy();
@@ -122,12 +133,8 @@ export class GameScene extends Phaser.Scene {
         const enemy = enemyObj as Enemy;
         if (!proj.active || !enemy.active) return;
 
-        const dead = enemy.takeDamage(proj.damage);
+        this.damageEnemy(enemy, proj.damage);
         proj.deactivate();
-
-        if (dead) {
-          this.onEnemyKilled(enemy);
-        }
       },
     );
 
@@ -146,10 +153,13 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.xpOrbs, (_p, orbObj) => {
       const orb = orbObj as XPOrb;
       if (!orb.active) return;
-      const leveled = this.levelSystem.addXp(orb.xpValue);
+      const levelsReached = this.levelSystem.addXp(orb.xpValue);
       orb.deactivate();
-      if (leveled > 0) {
-        this.pendingLevelUps += leveled;
+      if (levelsReached.length > 0) {
+        for (const levelReached of levelsReached) {
+          this.pendingChoices.push('upgrade');
+          if (levelReached % 5 === 0) this.pendingChoices.push('amulet');
+        }
         this.processPendingLevelUps();
       }
       this.redrawHud();
@@ -168,12 +178,93 @@ export class GameScene extends Phaser.Scene {
     this.redrawHud();
   }
 
+  private damageEnemy(enemy: Enemy, damage: number): void {
+    if (!enemy.active) return;
+    if (enemy.takeDamage(damage)) this.onEnemyKilled(enemy);
+  }
+
   private processPendingLevelUps(): void {
-    if (this.choosingUpgrade || this.pendingLevelUps <= 0 || this.gameOverTriggered) return;
-    this.pendingLevelUps -= 1;
+    if (this.choosingUpgrade || this.pendingChoices.length === 0 || this.gameOverTriggered) return;
+    const mode = this.pendingChoices.shift();
+    if (!mode) return;
+    if (mode === 'amulet' && this.amulets.owned.length >= 5) {
+      this.processPendingLevelUps();
+      return;
+    }
     this.choosingUpgrade = true;
     this.scene.pause();
-    this.scene.launch('UpgradeScene', { player: this.player });
+    this.scene.launch('UpgradeScene', {
+      player: this.player,
+      mode,
+      ownedAmulets: [...this.amulets.owned],
+      onAmuletSelected: (id: AmuletId) => this.applyAmulet(id),
+      onComplete: () => {
+        this.choosingUpgrade = false;
+        this.weapon.refreshRate();
+        this.redrawAmuletBadges();
+      },
+    });
+  }
+
+  private createEmptyAmuletState(): RunAmuletState {
+    return {
+      owned: [],
+      parallelShot: false,
+      diagonalShot: false,
+      damageAura: false,
+      reviveAvailable: false,
+      dogCompanion: false,
+    };
+  }
+
+  private applyAmulet(id: AmuletId): void {
+    if (this.amulets.owned.includes(id)) return;
+    this.amulets.owned.push(id);
+
+    switch (id) {
+      case 'araci_eyes':
+        this.amulets.parallelShot = true;
+        this.weapon.enableParallelShot();
+        break;
+      case 'jaci_claws':
+        this.amulets.diagonalShot = true;
+        this.weapon.enableDiagonalShot();
+        break;
+      case 'anhanga_circle':
+        this.amulets.damageAura = true;
+        this.auraVisual = this.add
+          .circle(this.player.x, this.player.y, 105, 0xc4a35a, 0.08)
+          .setStrokeStyle(2, 0xc4a35a, 0.45)
+          .setDepth(4);
+        break;
+      case 'tupa_breath':
+        this.amulets.reviveAvailable = true;
+        break;
+      case 'guara_tooth':
+        this.amulets.dogCompanion = true;
+        this.dog = new DogCompanion(this, this.player);
+        break;
+    }
+  }
+
+  private updateAmulets(time: number): void {
+    if (this.auraVisual) this.auraVisual.setPosition(this.player.x, this.player.y);
+
+    if (this.amulets.damageAura && time >= this.nextAuraTick) {
+      this.nextAuraTick = time + 500;
+      for (const enemy of this.spawner.enemies.getChildren() as Enemy[]) {
+        if (
+          enemy.active
+          && Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= 105
+        ) {
+          this.damageEnemy(enemy, 8);
+        }
+      }
+    }
+
+    this.dog?.update(time, this.spawner.enemies, (enemy, damage) => {
+      this.damageEnemy(enemy, damage);
+    });
   }
 
   private createHud(): void {
@@ -191,7 +282,31 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(102);
 
+    this.amuletBadges = this.add
+      .container(0, 0)
+      .setScrollFactor(0)
+      .setDepth(103);
+
     this.redrawHud();
+    this.redrawAmuletBadges();
+  }
+
+  private redrawAmuletBadges(): void {
+    this.amuletBadges.removeAll(true);
+    this.amulets.owned.forEach((id, index) => {
+      const amulet = getAmulet(id);
+      const x = 330 + index * 44;
+      const y = 25;
+      const badge = this.add.circle(x, y, 16, COLORS.accent).setStrokeStyle(2, 0xffe8a3);
+      const symbol = this.add
+        .text(x, y, amulet.symbol, {
+          fontFamily: 'Georgia, "Times New Roman", serif',
+          fontSize: '13px',
+          color: '#0d1a12',
+        })
+        .setOrigin(0.5);
+      this.amuletBadges.add([badge, symbol]);
+    });
   }
 
   private redrawHud(): void {
@@ -228,15 +343,32 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
-  update(_time: number, delta: number): void {
+  update(time: number, delta: number): void {
     if (this.gameOverTriggered || this.choosingUpgrade) return;
+
+    if (this.inputSystem.isPausePressed()) {
+      this.scene.pause();
+      this.scene.launch('PauseScene');
+      return;
+    }
+
+    if (this.pendingChoices.length > 0) {
+      this.processPendingLevelUps();
+      if (this.choosingUpgrade) return;
+    }
 
     this.inputSystem.update(this.player);
     this.spawner.update(delta);
+    this.updateAmulets(time);
     this.redrawHud();
 
     if (this.player.isDead()) {
-      this.triggerGameOver();
+      if (this.amulets.reviveAvailable) {
+        this.amulets.reviveAvailable = false;
+        this.player.revive(this.time.now);
+      } else {
+        this.triggerGameOver();
+      }
     }
   }
 
@@ -266,6 +398,7 @@ export class GameScene extends Phaser.Scene {
 
     this.time.delayedCall(400, () => {
       this.scene.stop('UpgradeScene');
+      this.scene.stop('PauseScene');
       this.scene.start('GameOverScene', summary);
     });
   }

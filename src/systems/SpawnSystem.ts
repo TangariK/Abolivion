@@ -11,7 +11,11 @@ export class SpawnSystem {
   private spawnTimer?: Phaser.Time.TimerEvent;
   private elapsed = 0;
 
-  constructor(scene: Phaser.Scene, player: Player) {
+  constructor(
+    scene: Phaser.Scene,
+    player: Player,
+    private readonly onEncounter?: (type: EnemyType) => void,
+  ) {
     this.scene = scene;
     this.player = player;
     this.enemies = scene.physics.add.group({
@@ -55,6 +59,7 @@ export class SpawnSystem {
     const enemy = this.enemies.get() as Enemy | null;
     if (!enemy) return;
     enemy.spawn(pos.x, pos.y, type);
+    this.onEncounter?.(type);
   }
 
   private pickType(): EnemyType {

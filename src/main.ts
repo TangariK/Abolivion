@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH } from './config/GameConfig';
+import { AlmanacScene } from './scenes/AlmanacScene';
 import { BootScene } from './scenes/BootScene';
 import { GameOverScene } from './scenes/GameOverScene';
 import { GameScene } from './scenes/GameScene';
 import { MenuScene } from './scenes/MenuScene';
+import { PauseScene } from './scenes/PauseScene';
 import { UpgradeScene } from './scenes/UpgradeScene';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -23,7 +25,15 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: false,
     },
   },
-  scene: [BootScene, MenuScene, GameScene, UpgradeScene, GameOverScene],
+  scene: [
+    BootScene,
+    MenuScene,
+    GameScene,
+    UpgradeScene,
+    PauseScene,
+    AlmanacScene,
+    GameOverScene,
+  ],
 };
 
 new Phaser.Game(config);

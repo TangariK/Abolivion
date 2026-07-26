@@ -9,6 +9,7 @@ export class InputSystem {
     S: Phaser.Input.Keyboard.Key;
     D: Phaser.Input.Keyboard.Key;
   };
+  private readonly escape: Phaser.Input.Keyboard.Key;
 
   constructor(scene: Phaser.Scene) {
     const keyboard = scene.input.keyboard;
@@ -19,9 +20,14 @@ export class InputSystem {
       S: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
       D: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
+    this.escape = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
   }
 
   update(player: Player): void {
     player.updateMovement(this.keys);
+  }
+
+  isPausePressed(): boolean {
+    return Phaser.Input.Keyboard.JustDown(this.escape);
   }
 }

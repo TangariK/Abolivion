@@ -54,6 +54,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return this.stats.hp <= 0;
   }
 
+  revive(now: number): void {
+    this.stats.hp = Math.max(1, Math.floor(this.stats.maxHp * 0.5));
+    this.invulnerableUntil = now + 2000;
+    this.setTint(0xf4d77b);
+    this.scene.time.delayedCall(500, () => {
+      if (this.active) this.clearTint();
+    });
+  }
+
   applyUpgrade(fn: (stats: PlayerStats) => void): void {
     fn(this.stats);
   }
