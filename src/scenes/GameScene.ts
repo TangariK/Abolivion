@@ -449,25 +449,43 @@ export class GameScene extends Phaser.Scene {
       const w = 420;
       const hx = (GAME_WIDTH - w) / 2;
       const hy = 40;
-      const ratio = this.waves.phase === 'break'
-        ? this.waves.intermissionMs / 5000
-        : this.waves.totalInWave > 0
-          ? this.waves.remaining / this.waves.totalInWave
-          : 0;
 
-      this.waveHudBg.fillStyle(COLORS.hudBg, 0.9).fillRect(hx, hy, w, 14);
-      this.waveHudFill.fillStyle(0xe05c5c, 1)
-        .fillRect(hx, hy, w * Phaser.Math.Clamp(ratio, 0, 1), 14);
+      let ratio = 0;
+      let fillColor = 0xe05c5c;
+      let label = '';
 
       if (this.waves.phase === 'break') {
-        this.waveHudText.setText(
-          `Próxima rodada em ${Math.ceil(this.waves.intermissionMs / 1000)}s`,
-        );
+        ratio = this.waves.intermissionMs / 5000;
+        fillColor = COLORS.accent;
+        label = `Próxima rodada em ${Math.ceil(this.waves.intermissionMs / 1000)}s`;
       } else {
-        this.waveHudText.setText(
-          `Rodada ${this.waves.wave}  ·  ${this.waves.remaining}/${this.waves.totalInWave}`,
+        const boss = (this.enemies.getChildren() as Enemy[]).find(
+          (e) => e.active && e.isBoss,
         );
+        if (boss) {
+          ratio = boss.maxHp > 0 ? boss.hp / boss.maxHp : 0;
+          fillColor = 0xc45a3a;
+          const minions = (this.enemies.getChildren() as Enemy[]).filter(
+            (e) => e.active && !e.isBoss,
+          ).length;
+          const bossName = boss.bossId === 'kurupi_brood'
+            ? 'Kurupi da Ninhada'
+            : 'Boitatá do Olhar';
+          label = boss.bossId === 'kurupi_brood'
+            ? `${bossName}  ·  HP ${Math.ceil(boss.hp)}  ·  Invocados ${minions}`
+            : `${bossName}  ·  HP ${Math.ceil(boss.hp)}/${boss.maxHp}`;
+        } else {
+          ratio = this.waves.totalInWave > 0
+            ? this.waves.remaining / this.waves.totalInWave
+            : 0;
+          label = `Rodada ${this.waves.wave}  ·  ${this.waves.remaining}/${this.waves.totalInWave}`;
+        }
       }
+
+      this.waveHudBg.fillStyle(COLORS.hudBg, 0.9).fillRect(hx, hy, w, 14);
+      this.waveHudFill.fillStyle(fillColor, 1)
+        .fillRect(hx, hy, w * Phaser.Math.Clamp(ratio, 0, 1), 14);
+      this.waveHudText.setText(label);
     }
   }
 

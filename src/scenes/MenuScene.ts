@@ -69,10 +69,10 @@ export class MenuScene extends Phaser.Scene {
 
   private buildModeSelector(): void {
     const x = GAME_WIDTH / 2;
-    const y = GAME_HEIGHT - 140;
+    const y = GAME_HEIGHT - 175;
 
     this.add
-      .text(x, y - 34, 'Modo de jogo', {
+      .text(x, y - 32, 'Modo de jogo', {
         fontFamily: 'Segoe UI, Tahoma, sans-serif',
         fontSize: '14px',
         color: '#a8c0a8',
@@ -80,17 +80,19 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     const button = this.add
-      .rectangle(x, y, 320, 44, 0x2a2417)
+      .rectangle(x, y, 280, 42, 0x2a2417)
       .setStrokeStyle(2, COLORS.accent)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ useHandCursor: true })
+      .setDepth(20);
 
     this.modeButtonLabel = this.add
       .text(x, y, `${MODE_LABELS[GameModeStore.get()]}  ▾`, {
         fontFamily: 'Georgia, "Times New Roman", serif',
-        fontSize: '20px',
+        fontSize: '18px',
         color: '#f4d77b',
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setDepth(21);
 
     button.on('pointerdown', () => this.toggleDropdown(x, y));
   }
@@ -102,7 +104,13 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
-    this.dropdown = this.add.container(x, y + 28).setDepth(50);
+    // Open upward so it doesn't overlap Começar / Marã
+    this.dropdown = this.add.container(x, y - 24).setDepth(60);
+    const panel = this.add
+      .rectangle(0, -66, 280, 132, 0x141c16, 0.98)
+      .setStrokeStyle(2, COLORS.accent);
+    this.dropdown.add(panel);
+
     const options: Array<{ id: GameModeId; locked?: boolean }> = [
       { id: 'infinite' },
       { id: 'waves' },
@@ -110,10 +118,11 @@ export class MenuScene extends Phaser.Scene {
     ];
 
     options.forEach((opt, i) => {
-      const oy = i * 44;
+      const oy = -110 + i * 44;
+      const selected = !opt.locked && GameModeStore.get() === opt.id;
       const bg = this.add
-        .rectangle(0, oy, 320, 40, 0x1a2a1e)
-        .setStrokeStyle(1, COLORS.cardBorder)
+        .rectangle(0, oy, 260, 38, selected ? 0x3b3220 : 0x1a2a1e)
+        .setStrokeStyle(1, selected ? COLORS.accent : COLORS.cardBorder)
         .setInteractive({ useHandCursor: !opt.locked });
       const label = this.add
         .text(0, oy, opt.locked ? 'História (em breve)' : MODE_LABELS[opt.id], {
@@ -125,7 +134,7 @@ export class MenuScene extends Phaser.Scene {
 
       if (!opt.locked) {
         bg.on('pointerover', () => bg.setFillStyle(0x243528));
-        bg.on('pointerout', () => bg.setFillStyle(0x1a2a1e));
+        bg.on('pointerout', () => bg.setFillStyle(selected ? 0x3b3220 : 0x1a2a1e));
         bg.on('pointerdown', () => {
           GameModeStore.set(opt.id);
           this.modeButtonLabel.setText(`${MODE_LABELS[opt.id]}  ▾`);
@@ -139,7 +148,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private buildShop(): void {
-    this.shopContainer = this.add.container(GAME_WIDTH / 2, 360);
+    this.shopContainer = this.add.container(GAME_WIDTH / 2, 340);
 
     const title = this.add
       .text(0, -150, 'Melhorias Permanentes', {
