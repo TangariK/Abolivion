@@ -10,17 +10,19 @@ export class SpawnSystem {
   enemies: Phaser.Physics.Arcade.Group;
   private spawnTimer?: Phaser.Time.TimerEvent;
   private elapsed = 0;
+  private readonly onEncounter?: (type: EnemyType) => void;
 
   constructor(
     scene: Phaser.Scene,
     player: Player,
-    private readonly onEncounter?: (type: EnemyType) => void,
+    onEncounter?: (type: EnemyType) => void,
   ) {
     this.scene = scene;
     this.player = player;
+    this.onEncounter = onEncounter;
     this.enemies = scene.physics.add.group({
       classType: Enemy,
-      maxSize: 200,
+      maxSize: 220,
       runChildUpdate: false,
     });
   }
@@ -65,16 +67,28 @@ export class SpawnSystem {
   private pickType(): EnemyType {
     const t = this.elapsed / 1000;
     const roll = Math.random();
-    if (t < 30) {
-      return roll < 0.7 ? 'fast' : 'normal';
+    if (t < 25) {
+      return roll < 0.65 ? 'fast' : 'normal';
     }
-    if (t < 90) {
-      if (roll < 0.4) return 'fast';
-      if (roll < 0.85) return 'normal';
+    if (t < 55) {
+      if (roll < 0.35) return 'fast';
+      if (roll < 0.55) return 'swift';
+      if (roll < 0.8) return 'normal';
+      return 'bruiser';
+    }
+    if (t < 100) {
+      if (roll < 0.2) return 'fast';
+      if (roll < 0.4) return 'swift';
+      if (roll < 0.55) return 'normal';
+      if (roll < 0.75) return 'armored';
+      if (roll < 0.9) return 'bruiser';
       return 'tank';
     }
-    if (roll < 0.25) return 'fast';
-    if (roll < 0.65) return 'normal';
+    if (roll < 0.15) return 'fast';
+    if (roll < 0.35) return 'swift';
+    if (roll < 0.5) return 'normal';
+    if (roll < 0.7) return 'armored';
+    if (roll < 0.85) return 'bruiser';
     return 'tank';
   }
 
@@ -86,19 +100,19 @@ export class SpawnSystem {
     let y = 0;
 
     switch (side) {
-      case 0: // top
+      case 0:
         x = Phaser.Math.Between(cam.worldView.left - margin, cam.worldView.right + margin);
         y = cam.worldView.top - margin;
         break;
-      case 1: // bottom
+      case 1:
         x = Phaser.Math.Between(cam.worldView.left - margin, cam.worldView.right + margin);
         y = cam.worldView.bottom + margin;
         break;
-      case 2: // left
+      case 2:
         x = cam.worldView.left - margin;
         y = Phaser.Math.Between(cam.worldView.top - margin, cam.worldView.bottom + margin);
         break;
-      default: // right
+      default:
         x = cam.worldView.right + margin;
         y = Phaser.Math.Between(cam.worldView.top - margin, cam.worldView.bottom + margin);
         break;

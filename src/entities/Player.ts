@@ -25,12 +25,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     A: Phaser.Input.Keyboard.Key;
     S: Phaser.Input.Keyboard.Key;
     D: Phaser.Input.Keyboard.Key;
+    UP: Phaser.Input.Keyboard.Key;
+    LEFT: Phaser.Input.Keyboard.Key;
+    DOWN: Phaser.Input.Keyboard.Key;
+    RIGHT: Phaser.Input.Keyboard.Key;
   }): void {
     this.moveVec.set(0, 0);
-    if (keys.A.isDown) this.moveVec.x -= 1;
-    if (keys.D.isDown) this.moveVec.x += 1;
-    if (keys.W.isDown) this.moveVec.y -= 1;
-    if (keys.S.isDown) this.moveVec.y += 1;
+    if (keys.A.isDown || keys.LEFT.isDown) this.moveVec.x -= 1;
+    if (keys.D.isDown || keys.RIGHT.isDown) this.moveVec.x += 1;
+    if (keys.W.isDown || keys.UP.isDown) this.moveVec.y -= 1;
+    if (keys.S.isDown || keys.DOWN.isDown) this.moveVec.y += 1;
 
     if (this.moveVec.lengthSq() > 0) {
       this.moveVec.normalize().scale(this.stats.speed);
@@ -48,6 +52,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       if (this.active) this.clearTint();
     });
     return true;
+  }
+
+  regenerate(amount: number): void {
+    if (this.stats.hp <= 0) return;
+    this.stats.hp = Math.min(this.stats.maxHp, this.stats.hp + amount);
   }
 
   isDead(): boolean {

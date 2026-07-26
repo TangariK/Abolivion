@@ -51,6 +51,22 @@ export const RUN_UPGRADES: RunUpgradeDef[] = [
       stats.projectileSpeed += 80;
     },
   },
+  {
+    id: 'xp_magnet',
+    name: 'Chamado da Clareira',
+    description: '+40 raio de coleta de XP',
+    apply: (stats: PlayerStats) => {
+      stats.xpPickupRadius += 40;
+    },
+  },
+  {
+    id: 'xp_gain',
+    name: 'Colheita Abundante',
+    description: '+25% XP ao derrotar inimigos',
+    apply: (stats: PlayerStats) => {
+      stats.xpGainBonus += 0.25;
+    },
+  },
 ];
 
 export function pickRandomUpgrades(count: number): RunUpgradeDef[] {

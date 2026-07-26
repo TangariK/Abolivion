@@ -1,13 +1,16 @@
 import Phaser from 'phaser';
 import type { Player } from '../entities/Player';
 
-/** WASD movement keys for the player */
 export class InputSystem {
   readonly keys: {
     W: Phaser.Input.Keyboard.Key;
     A: Phaser.Input.Keyboard.Key;
     S: Phaser.Input.Keyboard.Key;
     D: Phaser.Input.Keyboard.Key;
+    UP: Phaser.Input.Keyboard.Key;
+    LEFT: Phaser.Input.Keyboard.Key;
+    DOWN: Phaser.Input.Keyboard.Key;
+    RIGHT: Phaser.Input.Keyboard.Key;
   };
   private readonly escape: Phaser.Input.Keyboard.Key;
 
@@ -19,6 +22,10 @@ export class InputSystem {
       A: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       S: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
       D: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+      UP: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
+      LEFT: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
+      DOWN: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
+      RIGHT: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
     };
     this.escape = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
   }

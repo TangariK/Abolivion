@@ -19,6 +19,33 @@ _Mudanças em desenvolvimento, ainda sem número de versão._
 
 ---
 
+## [0.1.2] — 2026-07-25
+
+### Adicionado
+
+- Seleção de modo no menu: Infinito, Rodadas e História (bloqueada)
+- Modo Rodadas com barra de inimigos, pausa de 5s e progressão
+- Chefões: Kurupi da Ninhada (rodada 10) e Boitatá do Olhar (rodada 20)
+- Inimigos: Blindado, Sombra Ligeira e Quebra-Ossos
+- Amuletos: Lágrima de Iara (regen) e Espinhos da Cuca (thorns), ambos ☽☽☽
+- Sistema de raridade de amuletos em luas (1–5) com sorteio ponderado
+- Buffs: Chamado da Clareira (raio de XP) e Colheita Abundante (+XP)
+- Movimento também com setas do teclado
+- Marã: abas Chefões e Conquistas, detalhe ao clicar com imagem
+- 7 conquistas persistentes
+- Zip Game Jolt com versão no nome (`abolivion-vX.Y.Z-gamejolt.zip`)
+
+### Alterado
+
+- Save interno v3 com bosses e achievements (migração automática)
+- Amuletos existentes receberam raridade em luas
+
+### Detalhamento
+
+Ver [`docs/versions/0.1.2.md`](docs/versions/0.1.2.md).
+
+---
+
 ## [0.1.1] — 2026-07-25
 
 ### Adicionado
@@ -66,6 +93,7 @@ Ver snapshot completo em [`docs/versions/0.1.0.md`](docs/versions/0.1.0.md).
 
 ---
 
-[Unreleased]: https://github.com/TangariK/Abolivion/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/TangariK/Abolivion/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/TangariK/Abolivion/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/TangariK/Abolivion/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/TangariK/Abolivion/releases/tag/v0.1.0

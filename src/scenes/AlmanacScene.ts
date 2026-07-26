@@ -1,61 +1,73 @@
 import Phaser from 'phaser';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config/GameConfig';
-import type { AmuletDef, EnemyDef, RunUpgradeDef } from '../data/types';
-import { ENEMY_DEFS } from '../entities/Enemy';
-import { AMULETS } from '../upgrades/Amulets';
+import { ACHIEVEMENTS } from '../data/Achievements';
+import { BOSS_DEFS, ENEMY_DEFS } from '../data/EnemyCatalog';
+import { AMULETS, moonLabel } from '../upgrades/Amulets';
 import { SaveManager } from '../upgrades/MetaUpgrades';
 import { RUN_UPGRADES } from '../upgrades/RunUpgrades';
 
-type AlmanacTab = 'amulets' | 'upgrades' | 'enemies';
+type AlmanacTab = 'amulets' | 'upgrades' | 'enemies' | 'bosses' | 'achievements';
+
+interface AlmanacEntry {
+  title: string;
+  description: string;
+  lore?: string;
+  detail?: string;
+  textureKey?: string;
+  unlocked: boolean;
+  symbol?: string;
+  rarityLabel?: string;
+}
 
 export class AlmanacScene extends Phaser.Scene {
-  private content!: Phaser.GameObjects.Container;
+  private listContainer!: Phaser.GameObjects.Container;
+  private detailContainer!: Phaser.GameObjects.Container;
 
   constructor() {
     super('AlmanacScene');
   }
 
   create(): void {
-    this.add.rectangle(
-      GAME_WIDTH / 2,
-      GAME_HEIGHT / 2,
-      GAME_WIDTH,
-      GAME_HEIGHT,
-      0x050806,
-      0.88,
-    ).setInteractive();
     this.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1110, 620, 0x2a2417, 1)
-      .setStrokeStyle(4, COLORS.accent);
-    this.add.rectangle(GAME_WIDTH / 2 - 267, 375, 520, 500, 0xd8c89c, 1);
-    this.add.rectangle(GAME_WIDTH / 2 + 267, 375, 520, 500, 0xd8c89c, 1);
-    this.add.rectangle(GAME_WIDTH / 2, 375, 8, 500, 0x6e5a32, 0.7);
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x050806, 0.9)
+      .setInteractive();
 
     this.add
-      .text(GAME_WIDTH / 2, 58, 'MARÃ', {
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1180, 640, 0x2a2417)
+      .setStrokeStyle(4, COLORS.accent);
+
+    this.add
+      .text(GAME_WIDTH / 2, 48, 'MARÃ', {
         fontFamily: 'Georgia, "Times New Roman", serif',
-        fontSize: '42px',
+        fontSize: '40px',
         color: '#f4d77b',
       })
       .setOrigin(0.5);
+
     this.add
-      .text(GAME_WIDTH / 2, 96, 'Livro de memórias da tribo', {
+      .text(GAME_WIDTH / 2, 82, 'Livro de memórias da tribo', {
         fontFamily: 'Georgia, "Times New Roman", serif',
         fontStyle: 'italic',
-        fontSize: '15px',
+        fontSize: '14px',
         color: '#b7aa84',
       })
       .setOrigin(0.5);
 
-    this.makeTab(390, 'Amuletos', 'amulets');
-    this.makeTab(640, 'Melhorias', 'upgrades');
-    this.makeTab(890, 'Inimigos', 'enemies');
+    const tabs: Array<{ id: AlmanacTab; label: string; x: number }> = [
+      { id: 'amulets', label: 'Amuletos', x: 180 },
+      { id: 'upgrades', label: 'Melhorias', x: 360 },
+      { id: 'enemies', label: 'Inimigos', x: 540 },
+      { id: 'bosses', label: 'Chefões', x: 720 },
+      { id: 'achievements', label: 'Conquistas', x: 920 },
+    ];
+    tabs.forEach((tab) => this.makeTab(tab.x, tab.label, tab.id));
 
-    this.content = this.add.container(0, 0);
+    this.listContainer = this.add.container(0, 0);
+    this.detailContainer = this.add.container(0, 0);
     this.showTab('amulets');
 
     this.add
-      .text(1175, 52, 'FECHAR  X', {
+      .text(1180, 48, 'FECHAR  X', {
         fontFamily: 'Segoe UI, Tahoma, sans-serif',
         fontSize: '15px',
         color: '#e8f0e8',
@@ -71,13 +83,13 @@ export class AlmanacScene extends Phaser.Scene {
 
   private makeTab(x: number, label: string, tab: AlmanacTab): void {
     const button = this.add
-      .rectangle(x, 128, 210, 40, 0x6e5a32)
+      .rectangle(x, 118, 150, 36, 0x6e5a32)
       .setStrokeStyle(1, COLORS.accent)
       .setInteractive({ useHandCursor: true });
     this.add
-      .text(x, 128, label, {
+      .text(x, 118, label, {
         fontFamily: 'Georgia, "Times New Roman", serif',
-        fontSize: '18px',
+        fontSize: '15px',
         color: '#f7edce',
       })
       .setOrigin(0.5);
@@ -85,87 +97,179 @@ export class AlmanacScene extends Phaser.Scene {
   }
 
   private showTab(tab: AlmanacTab): void {
-    this.content.removeAll(true);
+    this.listContainer.removeAll(true);
+    this.detailContainer.removeAll(true);
+
     const profile = SaveManager.load();
+    let entries: AlmanacEntry[] = [];
 
     if (tab === 'amulets') {
-      AMULETS.forEach((item, index) => {
-        this.addEntry(
-          index,
-          profile.almanac.amulets.includes(item.id),
-          item.name,
-          item.description,
-          item.lore,
-          item.symbol,
-        );
-      });
-      return;
+      entries = AMULETS.map((item) => ({
+        title: item.name,
+        description: item.description,
+        lore: item.lore,
+        textureKey: item.textureKey,
+        unlocked: profile.almanac.amulets.includes(item.id),
+        symbol: item.symbol,
+        rarityLabel: moonLabel(item.rarity),
+        detail: `Raridade: ${moonLabel(item.rarity)} (${item.rarity}/5 luas)`,
+      }));
+    } else if (tab === 'upgrades') {
+      entries = RUN_UPGRADES.map((item) => ({
+        title: item.name,
+        description: item.description,
+        lore: 'Registrada após ser escolhida em uma run.',
+        unlocked: profile.almanac.upgrades.includes(item.id),
+        symbol: '+',
+      }));
+    } else if (tab === 'enemies') {
+      entries = Object.values(ENEMY_DEFS).map((enemy) => ({
+        title: enemy.name,
+        description: enemy.description,
+        detail: `HP ${enemy.hp} · Vel ${enemy.speed} · Dano ${enemy.damage} · XP ${enemy.xp}${
+          enemy.armor ? ` · Armadura ${enemy.armor}` : ''
+        }`,
+        textureKey: enemy.textureKey,
+        unlocked: profile.almanac.enemies.includes(enemy.type),
+        symbol: '!',
+      }));
+    } else if (tab === 'bosses') {
+      entries = Object.values(BOSS_DEFS).map((boss) => ({
+        title: boss.name,
+        description: boss.description,
+        lore: boss.lore,
+        detail: `Rodada ${boss.wave} · HP ${boss.hp} · Vel ${boss.speed} · Dano ${boss.damage}`,
+        textureKey: boss.textureKey,
+        unlocked: profile.almanac.bosses.includes(boss.id),
+        symbol: 'B',
+      }));
+    } else {
+      entries = ACHIEVEMENTS.map((a) => ({
+        title: a.name,
+        description: a.description,
+        lore: profile.almanac.achievements.includes(a.id)
+          ? 'Conquista desbloqueada.'
+          : 'Ainda oculta na memória da tribo.',
+        unlocked: profile.almanac.achievements.includes(a.id),
+        symbol: '★',
+      }));
     }
 
-    if (tab === 'upgrades') {
-      RUN_UPGRADES.forEach((item, index) => {
-        this.addUpgradeEntry(index, item, profile.almanac.upgrades.includes(item.id));
-      });
-      return;
-    }
+    entries.forEach((entry, index) => {
+      const y = 160 + index * 52;
+      const row = this.add
+        .rectangle(300, y, 480, 44, 0xd8c89c)
+        .setStrokeStyle(1, 0x8c7950)
+        .setInteractive({ useHandCursor: true });
+      const text = this.add
+        .text(
+          80,
+          y,
+          entry.unlocked
+            ? `${entry.symbol ?? '·'}  ${entry.title}${entry.rarityLabel ? `  ${entry.rarityLabel}` : ''}`
+            : '?  ???',
+          {
+            fontFamily: 'Georgia, "Times New Roman", serif',
+            fontSize: '16px',
+            color: entry.unlocked ? '#342815' : '#796f59',
+          },
+        )
+        .setOrigin(0, 0.5);
 
-    Object.values(ENEMY_DEFS).forEach((enemy, index) => {
-      this.addEnemyEntry(index, enemy, profile.almanac.enemies.includes(enemy.type));
+      row.on('pointerdown', () => this.showDetail(entry));
+      this.listContainer.add([row, text]);
     });
+
+    // Default detail for first unlocked or first entry
+    const first = entries.find((e) => e.unlocked) ?? entries[0];
+    if (first) this.showDetail(first);
   }
 
-  private addUpgradeEntry(index: number, item: RunUpgradeDef, unlocked: boolean): void {
-    this.addEntry(index, unlocked, item.name, item.description, 'Registrada após ser escolhida.', '+');
-  }
+  private showDetail(entry: AlmanacEntry): void {
+    this.detailContainer.removeAll(true);
 
-  private addEnemyEntry(index: number, enemy: EnemyDef, unlocked: boolean): void {
-    const names: Record<EnemyDef['type'], string> = {
-      fast: 'Invasor Veloz',
-      normal: 'Invasor',
-      tank: 'Invasor Couraçado',
-    };
-    const details = `HP ${enemy.hp}  ·  Vel ${enemy.speed}  ·  Dano ${enemy.damage}  ·  XP ${enemy.xp}`;
-    this.addEntry(index, unlocked, names[enemy.type], details, 'Registrado ao ser encontrado.', '!');
-  }
+    this.detailContainer.add(
+      this.add.rectangle(900, 400, 480, 480, 0xd8c89c).setStrokeStyle(2, 0x8c7950),
+    );
 
-  private addEntry(
-    index: number,
-    unlocked: boolean,
-    name: string,
-    description: string,
-    lore: string,
-    symbol: AmuletDef['symbol'],
-  ): void {
-    const column = index % 2;
-    const row = Math.floor(index / 2);
-    const x = column === 0 ? 373 : 907;
-    const y = 205 + row * 145;
+    if (entry.unlocked && entry.textureKey && this.textures.exists(entry.textureKey)) {
+      this.detailContainer.add(
+        this.add.image(900, 250, entry.textureKey).setDisplaySize(120, 120),
+      );
+    } else {
+      this.detailContainer.add(
+        this.add.circle(900, 250, 56, entry.unlocked ? COLORS.accent : 0x888888),
+      );
+    }
 
-    const title = this.add
-      .text(x - 205, y, unlocked ? `${symbol}  ${name}` : '?  ???', {
-        fontFamily: 'Georgia, "Times New Roman", serif',
-        fontSize: '19px',
-        color: unlocked ? '#342815' : '#796f59',
-      })
-      .setOrigin(0, 0.5);
-    const desc = this.add
-      .text(x - 205, y + 28, unlocked ? description : 'Este registro ainda não foi descoberto.', {
-        fontFamily: 'Segoe UI, Tahoma, sans-serif',
-        fontSize: '13px',
-        color: unlocked ? '#493b24' : '#887e68',
-        wordWrap: { width: 430 },
-      })
-      .setOrigin(0, 0);
-    const story = this.add
-      .text(x - 205, y + 67, unlocked ? lore : '', {
-        fontFamily: 'Georgia, "Times New Roman", serif',
-        fontStyle: 'italic',
-        fontSize: '11px',
-        color: '#6b5b3d',
-        wordWrap: { width: 430 },
-      })
-      .setOrigin(0, 0);
-    const divider = this.add.rectangle(x, y + 118, 430, 1, 0x8c7950, 0.55);
-    this.content.add([title, desc, story, divider]);
+    this.detailContainer.add(
+      this.add
+        .text(900, 340, entry.unlocked ? entry.title : '???', {
+          fontFamily: 'Georgia, "Times New Roman", serif',
+          fontSize: '26px',
+          color: '#342815',
+          align: 'center',
+          wordWrap: { width: 420 },
+        })
+        .setOrigin(0.5),
+    );
+
+    this.detailContainer.add(
+      this.add
+        .text(
+          900,
+          390,
+          entry.unlocked ? entry.description : 'Este registro ainda não foi descoberto.',
+          {
+            fontFamily: 'Segoe UI, Tahoma, sans-serif',
+            fontSize: '15px',
+            color: '#493b24',
+            align: 'center',
+            wordWrap: { width: 420 },
+          },
+        )
+        .setOrigin(0.5, 0),
+    );
+
+    if (entry.unlocked && entry.detail) {
+      this.detailContainer.add(
+        this.add
+          .text(900, 460, entry.detail, {
+            fontFamily: 'Segoe UI, Tahoma, sans-serif',
+            fontSize: '14px',
+            color: '#5a4a2e',
+            align: 'center',
+            wordWrap: { width: 420 },
+          })
+          .setOrigin(0.5, 0),
+      );
+    }
+
+    if (entry.unlocked && entry.lore) {
+      this.detailContainer.add(
+        this.add
+          .text(900, 510, entry.lore, {
+            fontFamily: 'Georgia, "Times New Roman", serif',
+            fontStyle: 'italic',
+            fontSize: '13px',
+            color: '#6b5b3d',
+            align: 'center',
+            wordWrap: { width: 420 },
+          })
+          .setOrigin(0.5, 0),
+      );
+    }
+
+    if (entry.unlocked && entry.rarityLabel) {
+      this.detailContainer.add(
+        this.add
+          .text(900, 580, entry.rarityLabel, {
+            fontFamily: 'Segoe UI, Tahoma, sans-serif',
+            fontSize: '20px',
+            color: '#6e5a32',
+          })
+          .setOrigin(0.5),
+      );
+    }
   }
 }

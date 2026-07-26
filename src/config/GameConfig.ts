@@ -31,6 +31,8 @@ export const PLAYER_BASE = {
   fireRate: 400,
   projectileSpeed: 450,
   radius: 14,
+  xpPickupRadius: 28,
+  xpGainBonus: 0,
 } as const;
 
 export const XP_CURVE = {

@@ -47,6 +47,8 @@ export function applyMetaToStats(base: PlayerStats, profile: Profile): PlayerSta
     damage: base.damage + levels.damage * 3,
     fireRate: Math.max(120, base.fireRate - fireRateReduction),
     projectileSpeed: base.projectileSpeed,
+    xpPickupRadius: base.xpPickupRadius,
+    xpGainBonus: base.xpGainBonus,
   };
 }
 

@@ -1,18 +1,45 @@
-export type EnemyType = 'fast' | 'normal' | 'tank';
+export type GameModeId = 'infinite' | 'waves' | 'story';
+
+export type EnemyType =
+  | 'fast'
+  | 'normal'
+  | 'tank'
+  | 'armored'
+  | 'swift'
+  | 'bruiser';
+
+export type BossId = 'kurupi_brood' | 'boitata_gaze';
+
 export type RunUpgradeId =
   | 'hp_up'
   | 'heal'
   | 'speed_up'
   | 'damage_up'
   | 'fire_rate'
-  | 'proj_speed';
+  | 'proj_speed'
+  | 'xp_magnet'
+  | 'xp_gain';
 
 export type AmuletId =
   | 'araci_eyes'
   | 'jaci_claws'
   | 'anhanga_circle'
   | 'tupa_breath'
-  | 'guara_tooth';
+  | 'guara_tooth'
+  | 'yara_tear'
+  | 'cuca_thorn';
+
+export type AchievementId =
+  | 'first_blood'
+  | 'night_walker'
+  | 'amulet_bearer'
+  | 'wave_survivor'
+  | 'boss_slayer'
+  | 'thorn_revenge'
+  | 'xp_scholar';
+
+/** Moon rarity for amulets: 1 (common) .. 5 (mythic) */
+export type MoonRarity = 1 | 2 | 3 | 4 | 5;
 
 export interface PlayerStats {
   maxHp: number;
@@ -21,10 +48,13 @@ export interface PlayerStats {
   damage: number;
   fireRate: number;
   projectileSpeed: number;
+  xpPickupRadius: number;
+  xpGainBonus: number;
 }
 
 export interface EnemyDef {
   type: EnemyType;
+  name: string;
   hp: number;
   speed: number;
   damage: number;
@@ -32,6 +62,23 @@ export interface EnemyDef {
   radius: number;
   color: number;
   textureKey: string;
+  description: string;
+  /** Extra armor layer before real HP (armored only) */
+  armor?: number;
+}
+
+export interface BossDef {
+  id: BossId;
+  name: string;
+  description: string;
+  lore: string;
+  textureKey: string;
+  hp: number;
+  speed: number;
+  damage: number;
+  xp: number;
+  radius: number;
+  wave: number;
 }
 
 export interface RunUpgradeDef {
@@ -47,6 +94,14 @@ export interface AmuletDef {
   description: string;
   lore: string;
   symbol: string;
+  rarity: MoonRarity;
+  textureKey: string;
+}
+
+export interface AchievementDef {
+  id: AchievementId;
+  name: string;
+  description: string;
 }
 
 export interface RunAmuletState {
@@ -56,6 +111,8 @@ export interface RunAmuletState {
   damageAura: boolean;
   reviveAvailable: boolean;
   dogCompanion: boolean;
+  lifeRegen: boolean;
+  thorns: boolean;
 }
 
 export type MetaUpgradeId = 'maxHp' | 'speed' | 'damage' | 'fireRate';
@@ -65,7 +122,6 @@ export interface MetaUpgradeDef {
   name: string;
   description: string;
   maxLevel: number;
-  /** Bonus applied per purchased level */
   bonusPerLevel: number;
 }
 
@@ -77,6 +133,8 @@ export interface Profile {
     enemies: EnemyType[];
     amulets: AmuletId[];
     upgrades: RunUpgradeId[];
+    bosses: BossId[];
+    achievements: AchievementId[];
   };
 }
 
@@ -86,4 +144,7 @@ export interface RunSummary {
   level: number;
   survivalMs: number;
   coinsEarned: number;
+  mode: GameModeId;
+  waveReached?: number;
+  bossesDefeated?: BossId[];
 }

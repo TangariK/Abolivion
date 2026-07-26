@@ -1,5 +1,7 @@
 import type {
+  AchievementId,
   AmuletId,
+  BossId,
   EnemyType,
   MetaUpgradeId,
   Profile,
@@ -7,7 +9,17 @@ import type {
 } from '../data/types';
 
 const SAVE_KEY = 'abolivion_profile_v1';
-const PROFILE_VERSION = 2;
+const PROFILE_VERSION = 3;
+
+function emptyAlmanac(): Profile['almanac'] {
+  return {
+    enemies: [],
+    amulets: [],
+    upgrades: [],
+    bosses: [],
+    achievements: [],
+  };
+}
 
 function defaultProfile(): Profile {
   return {
@@ -19,11 +31,7 @@ function defaultProfile(): Profile {
       damage: 0,
       fireRate: 0,
     },
-    almanac: {
-      enemies: [],
-      amulets: [],
-      upgrades: [],
-    },
+    almanac: emptyAlmanac(),
   };
 }
 
@@ -41,6 +49,10 @@ function normalizeProfile(parsed: Partial<Profile>): Profile {
       enemies: Array.isArray(parsed.almanac?.enemies) ? parsed.almanac.enemies : [],
       amulets: Array.isArray(parsed.almanac?.amulets) ? parsed.almanac.amulets : [],
       upgrades: Array.isArray(parsed.almanac?.upgrades) ? parsed.almanac.upgrades : [],
+      bosses: Array.isArray(parsed.almanac?.bosses) ? parsed.almanac.bosses : [],
+      achievements: Array.isArray(parsed.almanac?.achievements)
+        ? parsed.almanac.achievements
+        : [],
     },
   };
 }
@@ -52,8 +64,6 @@ export class SaveManager {
       if (!raw) return defaultProfile();
       const parsed = JSON.parse(raw) as Partial<Profile>;
       if (!parsed || typeof parsed !== 'object') return defaultProfile();
-      // v1 profiles did not have an almanac. Normalization migrates them
-      // without losing currency or permanent upgrades.
       return normalizeProfile(parsed);
     } catch {
       return defaultProfile();
@@ -64,7 +74,7 @@ export class SaveManager {
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(profile));
     } catch {
-      // private mode / quota — ignore
+      // private mode / quota
     }
   }
 
@@ -94,9 +104,25 @@ export class SaveManager {
     this.discover('upgrades', id);
   }
 
+  static discoverBoss(id: BossId): void {
+    this.discover('bosses', id);
+  }
+
+  static unlockAchievement(id: AchievementId): boolean {
+    const profile = this.load();
+    if (profile.almanac.achievements.includes(id)) return false;
+    profile.almanac.achievements.push(id);
+    this.save(profile);
+    return true;
+  }
+
+  static hasAchievement(id: AchievementId): boolean {
+    return this.load().almanac.achievements.includes(id);
+  }
+
   private static discover(
     category: keyof Profile['almanac'],
-    id: EnemyType | AmuletId | RunUpgradeId,
+    id: EnemyType | AmuletId | RunUpgradeId | BossId | AchievementId,
   ): void {
     const profile = this.load();
     const entries = profile.almanac[category] as string[];

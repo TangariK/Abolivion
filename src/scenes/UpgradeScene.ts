@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config/GameConfig';
 import type { AmuletId } from '../data/types';
 import type { Player } from '../entities/Player';
-import { pickAmulets } from '../upgrades/Amulets';
+import { moonLabel, pickAmulets } from '../upgrades/Amulets';
 import { SaveManager } from '../upgrades/MetaUpgrades';
 import { pickRandomUpgrades } from '../upgrades/RunUpgrades';
 
@@ -55,19 +55,16 @@ export class UpgradeScene extends Phaser.Scene {
           ? 'A cada 5 níveis, uma memória ancestral desperta'
           : 'Escolha uma melhoria',
         {
-        fontFamily: 'Segoe UI, Tahoma, sans-serif',
-        fontSize: '18px',
-        color: '#e8f0e8',
+          fontFamily: 'Segoe UI, Tahoma, sans-serif',
+          fontSize: '18px',
+          color: '#e8f0e8',
         },
       )
       .setOrigin(0.5)
       .setScrollFactor(0);
 
-    if (this.mode === 'amulet') {
-      this.createAmuletCards();
-    } else {
-      this.createUpgradeCards();
-    }
+    if (this.mode === 'amulet') this.createAmuletCards();
+    else this.createUpgradeCards();
   }
 
   private createUpgradeCards(): void {
@@ -109,6 +106,7 @@ export class UpgradeScene extends Phaser.Scene {
       card.on('pointerdown', () => {
         this.player.applyUpgrade(upgrade.apply);
         SaveManager.discoverUpgrade(upgrade.id);
+        if (upgrade.id === 'xp_gain') SaveManager.unlockAchievement('xp_scholar');
         this.finish();
       });
     });
@@ -133,30 +131,36 @@ export class UpgradeScene extends Phaser.Scene {
       const x = GAME_WIDTH / 2 + (i - (amulets.length - 1) / 2) * spacing;
       const y = GAME_HEIGHT / 2 + 35;
       const card = this.add
-        .rectangle(x, y, 270, 300, 0x231f13, 0.99)
+        .rectangle(x, y, 270, 320, 0x231f13, 0.99)
         .setStrokeStyle(3, COLORS.accent)
+        .setScrollFactor(0)
         .setInteractive({ useHandCursor: true });
 
+      this.add.circle(x, y - 115, 27, COLORS.accent).setStrokeStyle(2, 0xffe8a3);
       this.add
-        .circle(x, y - 105, 27, COLORS.accent)
-        .setStrokeStyle(2, 0xffe8a3);
-      this.add
-        .text(x, y - 105, amulet.symbol, {
+        .text(x, y - 115, amulet.symbol, {
           fontFamily: 'Georgia, "Times New Roman", serif',
           fontSize: '22px',
           color: '#0d1a12',
         })
         .setOrigin(0.5);
       this.add
-        .text(x, y - 60, amulet.name, {
+        .text(x, y - 70, amulet.name, {
           fontFamily: 'Georgia, "Times New Roman", serif',
-          fontSize: '21px',
+          fontSize: '20px',
           color: '#f4d77b',
           align: 'center',
         })
         .setOrigin(0.5);
       this.add
-        .text(x, y, amulet.description, {
+        .text(x, y - 40, moonLabel(amulet.rarity), {
+          fontFamily: 'Segoe UI, Tahoma, sans-serif',
+          fontSize: '18px',
+          color: '#c4a35a',
+        })
+        .setOrigin(0.5);
+      this.add
+        .text(x, y + 10, amulet.description, {
           fontFamily: 'Segoe UI, Tahoma, sans-serif',
           fontSize: '15px',
           color: '#e8f0e8',
@@ -165,7 +169,7 @@ export class UpgradeScene extends Phaser.Scene {
         })
         .setOrigin(0.5);
       this.add
-        .text(x, y + 78, amulet.lore, {
+        .text(x, y + 90, amulet.lore, {
           fontFamily: 'Georgia, "Times New Roman", serif',
           fontStyle: 'italic',
           fontSize: '12px',

@@ -33,7 +33,11 @@ export class GameOverScene extends Phaser.Scene {
     const profile = SaveManager.load();
 
     const lines = [
+      `Modo: ${this.summary.mode === 'waves' ? 'Rodadas' : 'Infinito'}`,
       `Nível alcançado: ${this.summary.level}`,
+      ...(this.summary.waveReached
+        ? [`Rodada alcançada: ${this.summary.waveReached}`]
+        : []),
       `Abates: ${this.summary.kills}`,
       `Tempo: ${secs}s`,
       `XP coletado: ${this.summary.xpCollected}`,
@@ -43,9 +47,9 @@ export class GameOverScene extends Phaser.Scene {
 
     lines.forEach((line, i) => {
       this.add
-        .text(GAME_WIDTH / 2, 220 + i * 36, line, {
+        .text(GAME_WIDTH / 2, 200 + i * 32, line, {
           fontFamily: 'Segoe UI, Tahoma, sans-serif',
-          fontSize: '22px',
+          fontSize: '20px',
           color: '#e8f0e8',
         })
         .setOrigin(0.5);

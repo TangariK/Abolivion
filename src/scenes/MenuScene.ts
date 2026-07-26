@@ -1,13 +1,22 @@
 import Phaser from 'phaser';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config/GameConfig';
-import type { Profile } from '../data/types';
+import { GameModeStore } from '../data/GameModeStore';
+import type { GameModeId, Profile } from '../data/types';
 import { SaveManager } from '../upgrades/MetaUpgrades';
 import { META_UPGRADE_DEFS, metaCost, tryBuyMeta } from '../upgrades/MetaShop';
+
+const MODE_LABELS: Record<GameModeId, string> = {
+  infinite: 'Infinito',
+  waves: 'Rodadas',
+  story: 'História',
+};
 
 export class MenuScene extends Phaser.Scene {
   private profile!: Profile;
   private coinsText!: Phaser.GameObjects.Text;
   private shopContainer!: Phaser.GameObjects.Container;
+  private modeButtonLabel!: Phaser.GameObjects.Text;
+  private dropdown?: Phaser.GameObjects.Container;
 
   constructor() {
     super('MenuScene');
@@ -17,7 +26,6 @@ export class MenuScene extends Phaser.Scene {
     this.profile = SaveManager.load();
     this.cameras.main.setBackgroundColor(COLORS.bg);
 
-    // Soft radial atmosphere via repeated faded circles
     const g = this.add.graphics();
     g.fillStyle(0x1a3324, 0.35);
     g.fillCircle(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 40, 420);
@@ -25,31 +33,32 @@ export class MenuScene extends Phaser.Scene {
     g.fillCircle(GAME_WIDTH / 2, GAME_HEIGHT * 0.35, 280);
 
     this.add
-      .text(GAME_WIDTH / 2, 90, 'ABOLIVION', {
+      .text(GAME_WIDTH / 2, 70, 'ABOLIVION', {
         fontFamily: 'Georgia, "Times New Roman", serif',
-        fontSize: '72px',
+        fontSize: '64px',
         color: '#e8f0e8',
       })
       .setOrigin(0.5);
 
     this.add
-      .text(GAME_WIDTH / 2, 160, 'Sobreviva à noite. Proteja o que restou.', {
+      .text(GAME_WIDTH / 2, 130, 'Sobreviva à noite. Proteja o que restou.', {
         fontFamily: 'Georgia, "Times New Roman", serif',
-        fontSize: '20px',
+        fontSize: '18px',
         color: '#a8c0a8',
       })
       .setOrigin(0.5);
 
     this.coinsText = this.add
-      .text(GAME_WIDTH / 2, 210, '', {
+      .text(GAME_WIDTH / 2, 168, '', {
         fontFamily: 'Segoe UI, Tahoma, sans-serif',
-        fontSize: '22px',
+        fontSize: '20px',
         color: '#c4a35a',
       })
       .setOrigin(0.5);
 
     this.refreshCoins();
     this.buildShop();
+    this.buildModeSelector();
     this.buildStartButton();
     this.buildAlmanacButton();
   }
@@ -58,13 +67,84 @@ export class MenuScene extends Phaser.Scene {
     this.coinsText.setText(`Moedas: ${this.profile.currency}`);
   }
 
+  private buildModeSelector(): void {
+    const x = GAME_WIDTH / 2;
+    const y = GAME_HEIGHT - 140;
+
+    this.add
+      .text(x, y - 34, 'Modo de jogo', {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '14px',
+        color: '#a8c0a8',
+      })
+      .setOrigin(0.5);
+
+    const button = this.add
+      .rectangle(x, y, 320, 44, 0x2a2417)
+      .setStrokeStyle(2, COLORS.accent)
+      .setInteractive({ useHandCursor: true });
+
+    this.modeButtonLabel = this.add
+      .text(x, y, `${MODE_LABELS[GameModeStore.get()]}  ▾`, {
+        fontFamily: 'Georgia, "Times New Roman", serif',
+        fontSize: '20px',
+        color: '#f4d77b',
+      })
+      .setOrigin(0.5);
+
+    button.on('pointerdown', () => this.toggleDropdown(x, y));
+  }
+
+  private toggleDropdown(x: number, y: number): void {
+    if (this.dropdown) {
+      this.dropdown.destroy(true);
+      this.dropdown = undefined;
+      return;
+    }
+
+    this.dropdown = this.add.container(x, y + 28).setDepth(50);
+    const options: Array<{ id: GameModeId; locked?: boolean }> = [
+      { id: 'infinite' },
+      { id: 'waves' },
+      { id: 'story', locked: true },
+    ];
+
+    options.forEach((opt, i) => {
+      const oy = i * 44;
+      const bg = this.add
+        .rectangle(0, oy, 320, 40, 0x1a2a1e)
+        .setStrokeStyle(1, COLORS.cardBorder)
+        .setInteractive({ useHandCursor: !opt.locked });
+      const label = this.add
+        .text(0, oy, opt.locked ? 'História (em breve)' : MODE_LABELS[opt.id], {
+          fontFamily: 'Segoe UI, Tahoma, sans-serif',
+          fontSize: '16px',
+          color: opt.locked ? '#666' : '#e8f0e8',
+        })
+        .setOrigin(0.5);
+
+      if (!opt.locked) {
+        bg.on('pointerover', () => bg.setFillStyle(0x243528));
+        bg.on('pointerout', () => bg.setFillStyle(0x1a2a1e));
+        bg.on('pointerdown', () => {
+          GameModeStore.set(opt.id);
+          this.modeButtonLabel.setText(`${MODE_LABELS[opt.id]}  ▾`);
+          this.dropdown?.destroy(true);
+          this.dropdown = undefined;
+        });
+      }
+
+      this.dropdown?.add([bg, label]);
+    });
+  }
+
   private buildShop(): void {
-    this.shopContainer = this.add.container(GAME_WIDTH / 2, 390);
+    this.shopContainer = this.add.container(GAME_WIDTH / 2, 360);
 
     const title = this.add
       .text(0, -150, 'Melhorias Permanentes', {
         fontFamily: 'Georgia, "Times New Roman", serif',
-        fontSize: '26px',
+        fontSize: '24px',
         color: '#c4a35a',
       })
       .setOrigin(0.5);
@@ -72,28 +152,27 @@ export class MenuScene extends Phaser.Scene {
 
     META_UPGRADE_DEFS.forEach((def, i) => {
       const x = (i - 1.5) * 220;
-      const y = 0;
       const level = this.profile.metaLevels[def.id];
       const cost = metaCost(level);
       const maxed = level >= def.maxLevel;
 
       const bg = this.add
-        .rectangle(x, y, 200, 140, COLORS.cardBg, 0.95)
+        .rectangle(x, 0, 200, 130, COLORS.cardBg, 0.95)
         .setStrokeStyle(2, COLORS.cardBorder)
         .setInteractive({ useHandCursor: true });
 
       const name = this.add
-        .text(x, y - 48, def.name, {
+        .text(x, -42, def.name, {
           fontFamily: 'Segoe UI, Tahoma, sans-serif',
-          fontSize: '18px',
+          fontSize: '17px',
           color: '#e8f0e8',
         })
         .setOrigin(0.5);
 
       const desc = this.add
-        .text(x, y - 18, def.description, {
+        .text(x, -14, def.description, {
           fontFamily: 'Segoe UI, Tahoma, sans-serif',
-          fontSize: '12px',
+          fontSize: '11px',
           color: '#a8c0a8',
           align: 'center',
           wordWrap: { width: 180 },
@@ -101,17 +180,17 @@ export class MenuScene extends Phaser.Scene {
         .setOrigin(0.5);
 
       const levelText = this.add
-        .text(x, y + 22, `Nível ${level}/${def.maxLevel}`, {
+        .text(x, 24, `Nível ${level}/${def.maxLevel}`, {
           fontFamily: 'Segoe UI, Tahoma, sans-serif',
-          fontSize: '14px',
+          fontSize: '13px',
           color: '#c4a35a',
         })
         .setOrigin(0.5);
 
       const costText = this.add
-        .text(x, y + 48, maxed ? 'MÁXIMO' : `${cost} moedas`, {
+        .text(x, 46, maxed ? 'MÁXIMO' : `${cost} moedas`, {
           fontFamily: 'Segoe UI, Tahoma, sans-serif',
-          fontSize: '14px',
+          fontSize: '13px',
           color: maxed ? '#666' : '#e8f0e8',
         })
         .setOrigin(0.5);
@@ -132,40 +211,36 @@ export class MenuScene extends Phaser.Scene {
 
   private buildStartButton(): void {
     const x = GAME_WIDTH / 2 - 140;
-    const y = GAME_HEIGHT - 70;
+    const y = GAME_HEIGHT - 60;
     const btn = this.add
-      .rectangle(x, y, 250, 56, COLORS.accent, 1)
+      .rectangle(x, y, 250, 52, COLORS.accent, 1)
       .setInteractive({ useHandCursor: true });
 
-    const label = this.add
+    this.add
       .text(x, y, 'COMEÇAR', {
         fontFamily: 'Georgia, "Times New Roman", serif',
-        fontSize: '28px',
+        fontSize: '26px',
         color: '#0d1a12',
       })
       .setOrigin(0.5);
 
     btn.on('pointerover', () => btn.setFillStyle(0xd4b86a));
     btn.on('pointerout', () => btn.setFillStyle(COLORS.accent));
-    btn.on('pointerdown', () => {
-      this.scene.start('GameScene');
-    });
-
-    label.setDepth(1);
+    btn.on('pointerdown', () => this.scene.start('GameScene'));
   }
 
   private buildAlmanacButton(): void {
     const x = GAME_WIDTH / 2 + 140;
-    const y = GAME_HEIGHT - 70;
+    const y = GAME_HEIGHT - 60;
     const button = this.add
-      .rectangle(x, y, 250, 56, 0x2a2417, 1)
+      .rectangle(x, y, 250, 52, 0x2a2417, 1)
       .setStrokeStyle(2, COLORS.accent)
       .setInteractive({ useHandCursor: true });
 
     this.add
       .text(x, y, 'MARÃ', {
         fontFamily: 'Georgia, "Times New Roman", serif',
-        fontSize: '26px',
+        fontSize: '24px',
         color: '#f4d77b',
       })
       .setOrigin(0.5);
