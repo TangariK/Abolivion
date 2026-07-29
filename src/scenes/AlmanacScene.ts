@@ -352,65 +352,72 @@ export class AlmanacScene extends Phaser.Scene {
     const reveal = entry.unlocked || Boolean(entry.revealLocked);
     const detailStroke = entry.tier ? TIER_STROKE[entry.tier] : 0x8c7950;
     const detailWidth = entry.tier === 'ancestral' ? 4 : entry.tier === 'tribal' ? 3 : 2;
-    const cardH = 500;
-    const cardY = 430;
+    // Painel do livro termina ~y=665 — o card precisa caber inteiro dentro
+    const cardH = 430;
+    const cardY = 395;
+    const cardBottom = cardY + cardH / 2 - 14;
 
     this.detailContainer.add(
-      this.add.rectangle(900, cardY, 480, cardH, 0xd8c89c).setStrokeStyle(detailWidth, detailStroke),
+      this.add.rectangle(900, cardY, 460, cardH, 0xd8c89c).setStrokeStyle(detailWidth, detailStroke),
     );
 
     if (entry.tier === 'ancestral') {
       this.detailContainer.add(
-        this.add.rectangle(900, cardY, 460, cardH - 20, 0x000000, 0).setStrokeStyle(1, 0xffe08a),
+        this.add.rectangle(900, cardY, 440, cardH - 18, 0x000000, 0).setStrokeStyle(1, 0xffe08a),
       );
     }
 
     if (reveal && entry.textureKey && this.textures.exists(entry.textureKey)) {
       this.detailContainer.add(
-        this.add.image(900, 248, entry.textureKey).setDisplaySize(110, 110),
+        this.add.image(900, 230, entry.textureKey).setDisplaySize(92, 92),
       );
     } else if (reveal && entry.symbol) {
-      this.detailContainer.add(this.add.circle(900, 248, 50, COLORS.accent));
+      this.detailContainer.add(this.add.circle(900, 230, 42, COLORS.accent));
       this.detailContainer.add(
         this.add
-          .text(900, 248, entry.symbol, {
+          .text(900, 230, entry.symbol, {
             fontFamily: 'Georgia, "Times New Roman", serif',
-            fontSize: '34px',
+            fontSize: '28px',
             color: '#0d1a12',
           })
           .setOrigin(0.5),
       );
     } else {
-      this.detailContainer.add(this.add.circle(900, 248, 50, 0x888888));
+      this.detailContainer.add(this.add.circle(900, 230, 42, 0x888888));
       this.detailContainer.add(
         this.add
-          .text(900, 248, '?', {
+          .text(900, 230, '?', {
             fontFamily: 'Georgia, "Times New Roman", serif',
-            fontSize: '34px',
+            fontSize: '28px',
             color: '#333',
           })
           .setOrigin(0.5),
       );
     }
 
-    let y = 318;
-    const gap = 10;
-    const wrap = 420;
+    let y = 290;
+    const gap = 8;
+    const wrap = 400;
 
     const pushText = (
       content: string,
       style: Phaser.Types.GameObjects.Text.TextStyle,
     ): void => {
+      if (y >= cardBottom - 8) return;
       const t = this.add
         .text(900, y, content, { ...style, align: 'center', wordWrap: { width: wrap } })
         .setOrigin(0.5, 0);
+      const maxH = cardBottom - y;
+      if (t.height > maxH) {
+        t.setFixedSize(wrap, maxH);
+      }
       this.detailContainer.add(t);
-      y += t.height + gap;
+      y += Math.min(t.height, maxH) + gap;
     };
 
     pushText(reveal ? entry.title : '???', {
       fontFamily: 'Georgia, "Times New Roman", serif',
-      fontSize: '22px',
+      fontSize: '20px',
       color: '#342815',
     });
 
@@ -418,7 +425,7 @@ export class AlmanacScene extends Phaser.Scene {
       reveal ? entry.description : 'Este registro ainda não foi descoberto.',
       {
         fontFamily: 'Segoe UI, Tahoma, sans-serif',
-        fontSize: '14px',
+        fontSize: '13px',
         color: '#493b24',
       },
     );
@@ -426,7 +433,7 @@ export class AlmanacScene extends Phaser.Scene {
     if (reveal && entry.detail) {
       pushText(entry.detail, {
         fontFamily: 'Segoe UI, Tahoma, sans-serif',
-        fontSize: '13px',
+        fontSize: '12px',
         color: '#5a4a2e',
       });
     }
@@ -435,7 +442,7 @@ export class AlmanacScene extends Phaser.Scene {
       pushText(entry.lore, {
         fontFamily: 'Georgia, "Times New Roman", serif',
         fontStyle: 'italic',
-        fontSize: '13px',
+        fontSize: '12px',
         color: '#6b5b3d',
       });
     }
@@ -443,7 +450,7 @@ export class AlmanacScene extends Phaser.Scene {
     if (reveal && entry.rarityLabel) {
       pushText(entry.rarityLabel, {
         fontFamily: 'Segoe UI, Tahoma, sans-serif',
-        fontSize: '18px',
+        fontSize: '16px',
         color: '#6e5a32',
       });
     }

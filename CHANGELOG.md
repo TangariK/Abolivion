@@ -15,22 +15,6 @@ Documentação detalhada de cada release: [`docs/versions/`](docs/versions/).
 
 ## [Unreleased]
 
-### Adicionado
-
-- **Mural da Tribo** (menu, canto superior esquerdo): filtros por rodada / tempo / abates / nível
-- Preferência no perfil: Público / Anônimo (nome de árvore fixo) / Invisível
-- Inimigos **NV2** após rodada 40 ou ~10 min no Infinito (mesmos tipos, mais fortes)
-
-### Corrigido / Ajustado
-
-- Crash de áudio no level-up (`volume` nulo) e freeze no modo Livre (`WaveSystem`)
-- Contato/tiro: inimigo para antes de sumir no player; tiro sai um pouco à frente
-- XP orb para de seguir quando você sai do magnetismo
-- Kurupi: corrida forte na direção do player; salto do Acrobata com área centrada
-- HUD TRIGGERED + torretas do Boitatá no estilo “Invocados”
-- Balanceamento progressivo dos chefões e Triggered mais agressivo
-- Loja de metas recentralizada; texto da Sabedoria Ancestral sem “(máx. −50%)”
-
 ---
 
 ## [0.1.7] — 2026-07-28
@@ -38,13 +22,25 @@ Documentação detalhada de cada release: [`docs/versions/`](docs/versions/).
 ### Adicionado
 
 - Dificuldade: IA de cerco no Infinito/Rodadas; mais inimigos na tela; spawns próximos com o tempo
-- Inimigos: Apunhalador, 4 Camuflados, Entorpecedor e Bruto Entorpecedor
+- Inimigos: Apunhalador, 4 Camuflados, Entorpecedor e Bruto Entorpecedor; **NV2** (rodada 40+ / ~10 min Infinito)
 - Status **Letargia** e **Tontura**; HUD de status com timer e barra
-- **Triggered Mode** em todos os chefões (metade da vida): grito, shake, poder extra
-- Boitatá: torretas destrutíveis (até 4) + contador; Envenenador: névoa/rastro e poções roxas
+- **Triggered Mode** em todos os chefões (metade da vida): grito, shake, poder extra + label TRIGGERED
+- Boitatá: torretas destrutíveis (até 4, algumas atrás do player) + dano ao encostar
+- Envenenador: névoa/rastro, poções nas costas do player, volley em círculo no Triggered
 - 5º chefão: **Acrobata da Clareira** (rodada 50) com música e saltos em área
 - Emblemas dropados por chefões + aba no Marã; XP de boss bem maior (orb grande)
-- Meta **Sabedoria Ancestral** (−5% XP/nível, máx. 50%); buffs Seiva/Ligadura; amuleto Véu de Cura
+- Meta **Sabedoria Ancestral**; buffs Seiva/Ligadura; amuleto Véu de Cura
+- **Mural da Tribo** (filtros por rodada/tempo/abates/nível) + privacidade Público/Anônimo/Invisível
+- Modo Livre: templates nomeados (salvar / abrir / sobrescrever)
+- Volume de música/efeitos na tela de pausa
+
+### Corrigido / Ajustado
+
+- Crash de áudio no level-up e freeze no Modo Livre (WaveSystem reutilizado)
+- Contato/tiro, XP limbo, Kurupi dash, flanco sem zigue-zague
+- Balanceamento progressivo dos chefões; HUD de torretas/amuletos
+- Loja de metas recentralizada; Marã sem overflow no painel de detalhe
+- Mural: cast de milissegundos fracionários no ranking
 
 ### Detalhamento
 
