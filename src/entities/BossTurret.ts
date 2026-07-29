@@ -6,6 +6,7 @@ export class BossTurret extends Phaser.Physics.Arcade.Sprite {
   maxHp = 80;
   nextShot = 0;
   ownerBossNetId = 0;
+  contactDamage = 16;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'boss_turret');

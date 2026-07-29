@@ -352,113 +352,100 @@ export class AlmanacScene extends Phaser.Scene {
     const reveal = entry.unlocked || Boolean(entry.revealLocked);
     const detailStroke = entry.tier ? TIER_STROKE[entry.tier] : 0x8c7950;
     const detailWidth = entry.tier === 'ancestral' ? 4 : entry.tier === 'tribal' ? 3 : 2;
+    const cardH = 500;
+    const cardY = 430;
 
     this.detailContainer.add(
-      this.add.rectangle(900, 420, 480, 460, 0xd8c89c).setStrokeStyle(detailWidth, detailStroke),
+      this.add.rectangle(900, cardY, 480, cardH, 0xd8c89c).setStrokeStyle(detailWidth, detailStroke),
     );
 
     if (entry.tier === 'ancestral') {
       this.detailContainer.add(
-        this.add.rectangle(900, 420, 460, 440, 0x000000, 0).setStrokeStyle(1, 0xffe08a),
+        this.add.rectangle(900, cardY, 460, cardH - 20, 0x000000, 0).setStrokeStyle(1, 0xffe08a),
       );
     }
 
     if (reveal && entry.textureKey && this.textures.exists(entry.textureKey)) {
       this.detailContainer.add(
-        this.add.image(900, 260, entry.textureKey).setDisplaySize(128, 128),
+        this.add.image(900, 248, entry.textureKey).setDisplaySize(110, 110),
       );
     } else if (reveal && entry.symbol) {
-      this.detailContainer.add(this.add.circle(900, 260, 56, COLORS.accent));
+      this.detailContainer.add(this.add.circle(900, 248, 50, COLORS.accent));
       this.detailContainer.add(
         this.add
-          .text(900, 260, entry.symbol, {
+          .text(900, 248, entry.symbol, {
             fontFamily: 'Georgia, "Times New Roman", serif',
-            fontSize: '36px',
+            fontSize: '34px',
             color: '#0d1a12',
           })
           .setOrigin(0.5),
       );
     } else {
-      this.detailContainer.add(this.add.circle(900, 260, 56, 0x888888));
+      this.detailContainer.add(this.add.circle(900, 248, 50, 0x888888));
       this.detailContainer.add(
         this.add
-          .text(900, 260, '?', {
+          .text(900, 248, '?', {
             fontFamily: 'Georgia, "Times New Roman", serif',
-            fontSize: '36px',
+            fontSize: '34px',
             color: '#333',
           })
           .setOrigin(0.5),
       );
     }
 
-    this.detailContainer.add(
-      this.add
-        .text(900, 350, reveal ? entry.title : '???', {
-          fontFamily: 'Georgia, "Times New Roman", serif',
-          fontSize: '24px',
-          color: '#342815',
-          align: 'center',
-          wordWrap: { width: 420 },
-        })
-        .setOrigin(0.5),
-    );
+    let y = 318;
+    const gap = 10;
+    const wrap = 420;
 
-    this.detailContainer.add(
-      this.add
-        .text(
-          900,
-          395,
-          reveal ? entry.description : 'Este registro ainda não foi descoberto.',
-          {
-            fontFamily: 'Segoe UI, Tahoma, sans-serif',
-            fontSize: '15px',
-            color: '#493b24',
-            align: 'center',
-            wordWrap: { width: 420 },
-          },
-        )
-        .setOrigin(0.5, 0),
+    const pushText = (
+      content: string,
+      style: Phaser.Types.GameObjects.Text.TextStyle,
+    ): void => {
+      const t = this.add
+        .text(900, y, content, { ...style, align: 'center', wordWrap: { width: wrap } })
+        .setOrigin(0.5, 0);
+      this.detailContainer.add(t);
+      y += t.height + gap;
+    };
+
+    pushText(reveal ? entry.title : '???', {
+      fontFamily: 'Georgia, "Times New Roman", serif',
+      fontSize: '22px',
+      color: '#342815',
+    });
+
+    pushText(
+      reveal ? entry.description : 'Este registro ainda não foi descoberto.',
+      {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '14px',
+        color: '#493b24',
+      },
     );
 
     if (reveal && entry.detail) {
-      this.detailContainer.add(
-        this.add
-          .text(900, 460, entry.detail, {
-            fontFamily: 'Segoe UI, Tahoma, sans-serif',
-            fontSize: '14px',
-            color: '#5a4a2e',
-            align: 'center',
-            wordWrap: { width: 420 },
-          })
-          .setOrigin(0.5, 0),
-      );
+      pushText(entry.detail, {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '13px',
+        color: '#5a4a2e',
+      });
     }
 
     if (reveal && entry.lore) {
-      this.detailContainer.add(
-        this.add
-          .text(900, 520, entry.lore, {
-            fontFamily: 'Georgia, "Times New Roman", serif',
-            fontStyle: 'italic',
-            fontSize: '13px',
-            color: '#6b5b3d',
-            align: 'center',
-            wordWrap: { width: 420 },
-          })
-          .setOrigin(0.5, 0),
-      );
+      pushText(entry.lore, {
+        fontFamily: 'Georgia, "Times New Roman", serif',
+        fontStyle: 'italic',
+        fontSize: '13px',
+        color: '#6b5b3d',
+      });
     }
 
     if (reveal && entry.rarityLabel) {
-      this.detailContainer.add(
-        this.add
-          .text(900, 590, entry.rarityLabel, {
-            fontFamily: 'Segoe UI, Tahoma, sans-serif',
-            fontSize: '20px',
-            color: '#6e5a32',
-          })
-          .setOrigin(0.5),
-      );
+      pushText(entry.rarityLabel, {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '18px',
+        color: '#6e5a32',
+      });
     }
   }
 }

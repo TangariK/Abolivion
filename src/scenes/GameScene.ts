@@ -645,6 +645,18 @@ export class GameScene extends Phaser.Scene {
         player.setVelocity(Math.cos(angle) * 220, Math.sin(angle) * 220);
       });
 
+      this.physics.add.overlap(player, this.turrets, (_p, turretObj) => {
+        const turret = turretObj as BossTurret;
+        if (!turret.active || player.isDead()) return;
+        if (this.online && this.onlineRole === 'guest') return;
+        const hit = player.takeDamage(turret.contactDamage, this.time.now);
+        if (hit) {
+          this.onPlayerDamaged();
+          const angle = Phaser.Math.Angle.Between(turret.x, turret.y, player.x, player.y);
+          player.setVelocity(Math.cos(angle) * 200, Math.sin(angle) * 200);
+        }
+      });
+
       this.physics.add.overlap(player, this.bossShots, (_p, shotObj) => {
         const shot = shotObj as BossProjectile;
         if (!shot.active || player.isDead()) return;
@@ -1215,10 +1227,10 @@ export class GameScene extends Phaser.Scene {
       this.nextBossAbility = time + (boss.triggered ? 480 : 1000);
       const target = this.nearestLivingPlayer(boss.x, boss.y) ?? this.player1;
       const purple = boss.triggered;
-      // Mira no centro, um pouco nas costas do player (poça pega nele)
+      // Mira nas costas do player (mais atrás para a poça pegar nele)
       const aimBehind = (ox = 0, oy = 0) => {
-        const tx = target.x - Math.cos(target.aimAngle) * 24 + ox;
-        const ty = target.y - Math.sin(target.aimAngle) * 24 + oy;
+        const tx = target.x - Math.cos(target.aimAngle) * 58 + ox;
+        const ty = target.y - Math.sin(target.aimAngle) * 58 + oy;
         const shot = this.bossShots.get() as BossProjectile | null;
         if (!shot) return;
         shot.firePoison(boss.x, boss.y, tx, ty, purple ? 380 : 340, purple ? 32 : 28, (x, y) => {
@@ -1498,7 +1510,8 @@ export class GameScene extends Phaser.Scene {
   private redrawAmuletBadges(): void {
     this.amuletBadges.removeAll(true);
     const hudTextY = this.playerCount === 2 ? 74 : 52;
-    const y = hudTextY + 26;
+    // Abaixo do texto de abates — sem cobrir HP/XP
+    const y = hudTextY + 52;
     this.amulets.owned.forEach((id, index) => {
       const amulet = getAmulet(id);
       const x = 24 + index * 40;

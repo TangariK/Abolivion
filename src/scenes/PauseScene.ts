@@ -53,29 +53,30 @@ export class PauseScene extends Phaser.Scene {
 
   private buildVolumePanel(): void {
     const prefs = AudioService.readPrefs();
-    const panelX = GAME_WIDTH - 150;
-    const panelY = 70;
+    const panelW = 248;
+    const panelH = 138;
+    const cx = GAME_WIDTH - panelW / 2 - 18;
+    const top = 18;
+    const cy = top + panelH / 2;
 
     this.add
-      .rectangle(panelX, panelY + 48, 260, 130, 0x1a2a1e, 0.92)
+      .rectangle(cx, cy, panelW, panelH, 0x1a2a1e, 0.95)
       .setStrokeStyle(2, COLORS.accent)
-      .setScrollFactor(0)
       .setDepth(20);
 
     this.add
-      .text(panelX, panelY - 8, 'Som', {
+      .text(cx, top + 22, 'Som', {
         fontFamily: 'Georgia, "Times New Roman", serif',
         fontSize: '20px',
         color: '#c4a35a',
       })
       .setOrigin(0.5)
-      .setScrollFactor(0)
       .setDepth(21);
 
-    this.makeVolumeSlider(panelX, panelY + 28, 'Música', prefs.musicVolume, (v) => {
+    this.makeVolumeSlider(cx, top + 58, 'Música', prefs.musicVolume, (v) => {
       AudioService.writePrefs({ musicVolume: v });
     });
-    this.makeVolumeSlider(panelX, panelY + 72, 'Efeitos', prefs.sfxVolume, (v) => {
+    this.makeVolumeSlider(cx, top + 102, 'Efeitos', prefs.sfxVolume, (v) => {
       AudioService.writePrefs({ sfxVolume: v });
     });
   }
@@ -87,29 +88,29 @@ export class PauseScene extends Phaser.Scene {
     initial: number,
     onChange: (v: number) => void,
   ): void {
+    const trackW = 148;
+    const trackX = cx - trackW / 2 - 10;
+
     this.add
-      .text(cx - 110, y - 14, label, {
+      .text(cx, y - 14, label, {
         fontFamily: 'Segoe UI, Tahoma, sans-serif',
         fontSize: '13px',
         color: '#a8c0a8',
       })
-      .setOrigin(0, 0.5)
+      .setOrigin(0.5)
       .setDepth(21);
 
-    const trackW = 160;
-    const trackX = cx - 30;
     this.add
-      .rectangle(trackX, y + 8, trackW, 8, 0x2a3a2e)
-      .setOrigin(0, 0.5)
+      .rectangle(trackX + trackW / 2, y + 6, trackW, 8, 0x2a3a2e)
       .setDepth(21);
 
     const fill = this.add
-      .rectangle(trackX, y + 8, trackW * Phaser.Math.Clamp(initial, 0, 1), 8, COLORS.accent)
+      .rectangle(trackX, y + 6, trackW * Phaser.Math.Clamp(initial, 0, 1), 8, COLORS.accent)
       .setOrigin(0, 0.5)
       .setDepth(22);
 
     const pct = this.add
-      .text(trackX + trackW + 8, y + 8, `${Math.round(initial * 100)}%`, {
+      .text(trackX + trackW + 8, y + 6, `${Math.round(initial * 100)}%`, {
         fontFamily: 'Segoe UI, Tahoma, sans-serif',
         fontSize: '12px',
         color: '#e8f0e8',
@@ -118,13 +119,13 @@ export class PauseScene extends Phaser.Scene {
       .setDepth(22);
 
     const hit = this.add
-      .rectangle(trackX + trackW / 2, y + 8, trackW + 16, 28, 0x000000, 0.001)
+      .rectangle(trackX + trackW / 2, y + 6, trackW + 12, 26, 0x000000, 0.001)
       .setInteractive({ useHandCursor: true })
       .setDepth(23);
 
     const apply = (pointerX: number) => {
       const local = Phaser.Math.Clamp((pointerX - trackX) / trackW, 0, 1);
-      fill.width = trackW * local;
+      fill.width = Math.max(2, trackW * local);
       pct.setText(`${Math.round(local * 100)}%`);
       onChange(local);
     };
