@@ -10,6 +10,12 @@ import type {
 } from '../data/types';
 import { AdminService } from '../services/AdminService';
 import { AudioService } from '../services/AudioService';
+import {
+  deleteFreeTemplate,
+  getFreeTemplate,
+  listFreeTemplates,
+  saveFreeTemplate,
+} from '../data/FreeModeTemplates';
 import { AMULETS, moonLabel } from '../upgrades/Amulets';
 import { META_UPGRADE_DEFS } from '../upgrades/MetaShop';
 import { RUN_UPGRADES } from '../upgrades/RunUpgrades';
@@ -81,6 +87,71 @@ export class FreeModeSetupOverlay {
         + 'Aqui nada é registrado: sem moedas, sem Marã e sem conquistas (exceto as do próprio Livre).',
       ),
     );
+
+    // Controles de template (preenchidos depois que os inputs existem)
+    const templateBar = document.createElement('div');
+    Object.assign(templateBar.style, {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: '8px',
+      alignItems: 'center',
+      marginTop: '10px',
+      marginBottom: '4px',
+      padding: '10px 12px',
+      background: 'rgba(196,163,90,0.08)',
+      border: '1px solid rgba(196,163,90,0.28)',
+      borderRadius: '8px',
+    } as CSSStyleDeclaration);
+    const templateTitle = document.createElement('div');
+    templateTitle.textContent = 'Templates';
+    Object.assign(templateTitle.style, {
+      width: '100%',
+      fontFamily: 'Georgia, Times New Roman, serif',
+      fontSize: '15px',
+      color: ACCENT,
+      marginBottom: '2px',
+    } as CSSStyleDeclaration);
+    const templateSelect = document.createElement('select');
+    Object.assign(templateSelect.style, {
+      flex: '1 1 160px',
+      minWidth: '140px',
+      padding: '8px',
+      background: '#141c16',
+      color: TEXT,
+      border: `1px solid ${ACCENT}`,
+      borderRadius: '6px',
+    } as CSSStyleDeclaration);
+    const templateName = document.createElement('input');
+    templateName.type = 'text';
+    templateName.placeholder = 'Nome do template';
+    templateName.maxLength = 40;
+    Object.assign(templateName.style, {
+      flex: '1 1 140px',
+      minWidth: '120px',
+      padding: '8px',
+      background: '#141c16',
+      color: TEXT,
+      border: `1px solid ${ACCENT}`,
+      borderRadius: '6px',
+    } as CSSStyleDeclaration);
+    const refreshTemplateSelect = () => {
+      const list = listFreeTemplates();
+      const prev = templateSelect.value;
+      templateSelect.replaceChildren();
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = list.length ? 'Abrir template…' : 'Nenhum template salvo';
+      templateSelect.append(placeholder);
+      for (const t of list) {
+        const opt = document.createElement('option');
+        opt.value = t.name;
+        opt.textContent = t.name;
+        templateSelect.append(opt);
+      }
+      if (prev && list.some((t) => t.name === prev)) templateSelect.value = prev;
+    };
+    // Will wire buttons after inputs exist
+    panel.append(templateBar);
 
     // ————— Base —————
     const baseSection = this.section('Base da partida');
@@ -238,17 +309,40 @@ export class FreeModeSetupOverlay {
       minHeight: '18px',
     } as CSSStyleDeclaration);
 
-    const actions = document.createElement('div');
-    Object.assign(actions.style, {
-      display: 'flex',
-      gap: '10px',
-      marginTop: '14px',
-    } as CSSStyleDeclaration);
+    const clampVal = (n: number, min: number, max: number) =>
+      Math.max(min, Math.min(max, Math.floor(n)));
 
-    const startBtn = this.button('INICIAR', ACCENT, '#0d1a12');
-    startBtn.onclick = () => {
-      AudioService.playSfx('sfx_ui_click');
-      const config = this.buildConfig({
+    const applyConfig = (cfg: FreeModeConfig) => {
+      waveRadio.input.checked = cfg.baseKind === 'wave';
+      infRadio.input.checked = cfg.baseKind === 'infinite';
+      customRadio.input.checked = cfg.baseKind === 'custom';
+      waveInput.value = String(clampVal(cfg.wave, 1, maxWave));
+      timeInput.value = String(clampVal(Math.floor(cfg.startTimeMs / 1000), 0, maxTimeSec));
+      levelInput.value = String(clampVal(cfg.startLevel, 1, maxLevel));
+      for (const [id, input] of buffInputs) {
+        input.value = String(cfg.buffCounts[id] ?? 0);
+      }
+      for (const [id, input] of amuletChecks) {
+        input.checked = cfg.amulets.includes(id);
+      }
+      useMetaCheck.input.checked = cfg.useMeta;
+      metaGrid.style.opacity = cfg.useMeta ? '1' : '0.35';
+      for (const [id, input] of metaInputs) {
+        input.disabled = !cfg.useMeta;
+        const cap = Number(input.max) || 10;
+        input.value = String(clampVal(cfg.metaLevels[id] ?? 0, 0, cap));
+      }
+      for (const [type, input] of enemyInputs) {
+        input.value = String(cfg.customEnemies[type] ?? 0);
+      }
+      for (const [id, input] of bossChecks) {
+        if (!input.disabled) input.checked = cfg.customBosses.includes(id);
+      }
+      syncCustomVisibility();
+    };
+
+    const readCurrentConfig = () =>
+      this.buildConfig({
         dev,
         maxWave,
         maxTimeSec,
@@ -265,6 +359,103 @@ export class FreeModeSetupOverlay {
         bossChecks,
         defeatedBosses,
       });
+
+    const loadBtn = this.button('Abrir', '#2a3a2e', ACCENT, true);
+    loadBtn.style.flex = '0 0 auto';
+    loadBtn.onclick = () => {
+      AudioService.playSfx('sfx_ui_click');
+      const name = templateSelect.value || templateName.value.trim();
+      if (!name) {
+        errorMsg.textContent = 'Escolha ou digite o nome de um template.';
+        return;
+      }
+      const found = getFreeTemplate(name);
+      if (!found) {
+        errorMsg.textContent = 'Template não encontrado.';
+        return;
+      }
+      applyConfig(found.config);
+      templateName.value = found.name;
+      templateSelect.value = found.name;
+      errorMsg.style.color = '#8ecf9a';
+      errorMsg.textContent = `Template “${found.name}” carregado.`;
+      window.setTimeout(() => {
+        errorMsg.style.color = '#e08a7a';
+        errorMsg.textContent = '';
+      }, 1800);
+    };
+
+    const saveBtn = this.button('Salvar', '#2a3a2e', ACCENT, true);
+    saveBtn.style.flex = '0 0 auto';
+    saveBtn.onclick = () => {
+      AudioService.playSfx('sfx_ui_click');
+      const name = templateName.value.trim() || templateSelect.value;
+      if (!name) {
+        errorMsg.textContent = 'Digite um nome para o template.';
+        return;
+      }
+      const config = readCurrentConfig();
+      if (typeof config === 'string') {
+        errorMsg.textContent = config;
+        return;
+      }
+      saveFreeTemplate(name, config);
+      refreshTemplateSelect();
+      templateSelect.value = name;
+      templateName.value = name;
+      errorMsg.style.color = '#8ecf9a';
+      errorMsg.textContent = `Template “${name}” salvo.`;
+      window.setTimeout(() => {
+        errorMsg.style.color = '#e08a7a';
+        errorMsg.textContent = '';
+      }, 1800);
+    };
+
+    const deleteBtn = this.button('Apagar', 'transparent', MUTED, true);
+    deleteBtn.style.flex = '0 0 auto';
+    deleteBtn.onclick = () => {
+      AudioService.playSfx('sfx_ui_back');
+      const name = templateSelect.value || templateName.value.trim();
+      if (!name) {
+        errorMsg.textContent = 'Selecione um template para apagar.';
+        return;
+      }
+      deleteFreeTemplate(name);
+      refreshTemplateSelect();
+      templateName.value = '';
+      errorMsg.style.color = '#8ecf9a';
+      errorMsg.textContent = `Template “${name}” removido.`;
+      window.setTimeout(() => {
+        errorMsg.style.color = '#e08a7a';
+        errorMsg.textContent = '';
+      }, 1800);
+    };
+
+    templateSelect.addEventListener('change', () => {
+      if (templateSelect.value) templateName.value = templateSelect.value;
+    });
+
+    templateBar.append(
+      templateTitle,
+      templateSelect,
+      loadBtn,
+      templateName,
+      saveBtn,
+      deleteBtn,
+    );
+    refreshTemplateSelect();
+
+    const actions = document.createElement('div');
+    Object.assign(actions.style, {
+      display: 'flex',
+      gap: '10px',
+      marginTop: '14px',
+    } as CSSStyleDeclaration);
+
+    const startBtn = this.button('INICIAR', ACCENT, '#0d1a12');
+    startBtn.onclick = () => {
+      AudioService.playSfx('sfx_ui_click');
+      const config = readCurrentConfig();
       if (typeof config === 'string') {
         errorMsg.textContent = config;
         return;

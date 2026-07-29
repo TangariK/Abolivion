@@ -88,9 +88,15 @@ export class WaveSystem {
   notifyKill(): void {}
 
   spawnExtra(type: EnemyType, at?: { x: number; y: number }): void {
-    const pos = at ?? this.spawnPositionOutsideCamera();
-    const enemy = this.enemies.get() as Enemy | null;
+    if (!this.enemies?.children) return;
+    let enemy: Enemy | null = null;
+    try {
+      enemy = this.enemies.get() as Enemy | null;
+    } catch {
+      return;
+    }
     if (!enemy) return;
+    const pos = at ?? this.spawnPositionOutsideCamera();
     enemy.spawn(pos.x, pos.y, type);
     if (shouldPromoteElite(this.wave)) enemy.promoteElite();
     this.onEncounter(type);

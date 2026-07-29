@@ -115,6 +115,7 @@ export class GameScene extends Phaser.Scene {
   private nextBossAbility = 0;
   private nextLightningTick = 0;
   private nextKurupiDash = 0;
+  private kurupiDashEnd = 0;
   private nextAcrobatLeap = 0;
   private acrobatLeapEnd = 0;
   private nextPoisonTrail = 0;
@@ -188,6 +189,7 @@ export class GameScene extends Phaser.Scene {
     this.nextBossAbility = 0;
     this.nextLightningTick = 0;
     this.nextKurupiDash = 0;
+    this.kurupiDashEnd = 0;
     this.nextAcrobatLeap = 0;
     this.acrobatLeapEnd = 0;
     this.nextPoisonTrail = 0;
@@ -209,6 +211,10 @@ export class GameScene extends Phaser.Scene {
     this.survivalMs = 0;
     this.levelSystem = new LevelSystem();
     this.toasts = new AchievementToast(this);
+
+    // Cena Phaser é reutilizada — limpa sistemas da run anterior (senão Livre chama spawnExtra num group morto).
+    this.waves = undefined;
+    this.spawner = undefined;
 
     AudioService.bind(this);
     AudioService.stopAllMusic();
@@ -1116,10 +1122,15 @@ export class GameScene extends Phaser.Scene {
       this.nextBossAbility = time + (boss.triggered ? 900 : 2000);
       const at = boss.triggered ? { x: boss.x, y: boss.y } : undefined;
       const summon = (type: EnemyType) => {
-        if (this.waves) this.waves.spawnExtra(type, at);
+        if (this.waves?.enemies?.children) this.waves.spawnExtra(type, at);
         else {
           if (at) {
-            const enemy = this.enemies.get() as Enemy | null;
+            let enemy: Enemy | null = null;
+            try {
+              enemy = this.enemies.get() as Enemy | null;
+            } catch {
+              return;
+            }
             if (enemy) {
               enemy.spawn(at.x, at.y, type);
               this.customTotal += 1;
@@ -1164,7 +1175,7 @@ export class GameScene extends Phaser.Scene {
       this.nextBossAbility = time + (boss.triggered ? 800 : 1700);
       const pack: EnemyType[] = ['dire_wolf', 'dire_wolf_pup', 'dire_wolf_brute'];
       const pick = () => pack[Phaser.Math.Between(0, pack.length - 1)];
-      if (this.waves) {
+      if (this.waves?.enemies?.children) {
         this.waves.spawnExtra(pick());
         this.waves.spawnExtra(pick());
         if (boss.triggered) {
@@ -1203,19 +1214,44 @@ export class GameScene extends Phaser.Scene {
     if (boss.bossId === 'poisoner_master') {
       this.nextBossAbility = time + (boss.triggered ? 480 : 1000);
       const target = this.nearestLivingPlayer(boss.x, boss.y) ?? this.player1;
-      const tx = target.x + (Math.random() - 0.5) * 140;
-      const ty = target.y + (Math.random() - 0.5) * 140;
-      const shot = this.bossShots.get() as BossProjectile | null;
-      if (!shot) return;
       const purple = boss.triggered;
-      shot.firePoison(boss.x, boss.y, tx, ty, purple ? 380 : 340, purple ? 32 : 28, (x, y) => {
-        this.spawnPoisonPuddle(x, y, purple ? 9000 : 5000, purple);
-        AudioService.playSfx('sfx_potion_land');
-      });
-      if (purple) {
-        shot.setTexture('poison_shot_purple');
-        shot.clearTint();
+      // Mira no centro, um pouco nas costas do player (poça pega nele)
+      const aimBehind = (ox = 0, oy = 0) => {
+        const tx = target.x - Math.cos(target.aimAngle) * 24 + ox;
+        const ty = target.y - Math.sin(target.aimAngle) * 24 + oy;
+        const shot = this.bossShots.get() as BossProjectile | null;
+        if (!shot) return;
+        shot.firePoison(boss.x, boss.y, tx, ty, purple ? 380 : 340, purple ? 32 : 28, (x, y) => {
+          this.spawnPoisonPuddle(x, y, purple ? 9000 : 5000, purple);
+          AudioService.playSfx('sfx_potion_land');
+        });
+        if (purple) {
+          shot.setTexture('poison_shot_purple');
+          shot.clearTint();
+        }
+      };
+
+      // ~1/10 no Triggered: círculo de poções cercando o player
+      if (purple && Math.random() < 0.1) {
+        const n = 8;
+        const radius = 100;
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * Math.PI * 2;
+          const shot = this.bossShots.get() as BossProjectile | null;
+          if (!shot) continue;
+          const tx = target.x + Math.cos(a) * radius;
+          const ty = target.y + Math.sin(a) * radius;
+          shot.firePoison(boss.x, boss.y, tx, ty, 360, 30, (x, y) => {
+            this.spawnPoisonPuddle(x, y, 9000, true);
+            AudioService.playSfx('sfx_potion_land');
+          });
+          shot.setTexture('poison_shot_purple');
+          shot.clearTint();
+        }
+        return;
       }
+
+      aimBehind();
       return;
     }
 
@@ -1228,10 +1264,21 @@ export class GameScene extends Phaser.Scene {
   private spawnBoitataTurret(boss: Enemy): void {
     const turret = this.turrets.get() as BossTurret | null;
     if (!turret) return;
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 90 + Math.random() * 50;
-    const x = Phaser.Math.Clamp(boss.x + Math.cos(angle) * dist, 40, WORLD_WIDTH - 40);
-    const y = Phaser.Math.Clamp(boss.y + Math.sin(angle) * dist, 40, WORLD_HEIGHT - 40);
+    const target = this.nearestLivingPlayer(boss.x, boss.y) ?? this.player1;
+    let x: number;
+    let y: number;
+    if (Math.random() < 0.5) {
+      // Surpresa atrás do player
+      const ang = target.aimAngle + Math.PI + (Math.random() - 0.5) * 1.1;
+      const dist = 95 + Math.random() * 85;
+      x = Phaser.Math.Clamp(target.x + Math.cos(ang) * dist, 40, WORLD_WIDTH - 40);
+      y = Phaser.Math.Clamp(target.y + Math.sin(ang) * dist, 40, WORLD_HEIGHT - 40);
+    } else {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 90 + Math.random() * 50;
+      x = Phaser.Math.Clamp(boss.x + Math.cos(angle) * dist, 40, WORLD_WIDTH - 40);
+      y = Phaser.Math.Clamp(boss.y + Math.sin(angle) * dist, 40, WORLD_HEIGHT - 40);
+    }
     turret.spawn(x, y, boss.netId);
   }
 
@@ -1360,23 +1407,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateKurupiDash(boss: Enemy, target: Player, time: number): void {
+    const body = boss.body as Phaser.Physics.Arcade.Body;
     if (boss.leaping) {
-      const body = boss.body as Phaser.Physics.Arcade.Body;
-      if (time >= this.acrobatLeapEnd) {
+      const angle = Phaser.Math.Angle.Between(boss.x, boss.y, target.x, target.y);
+      this.physics.velocityFromRotation(angle, Math.max(520, boss.moveSpeed * 10), body.velocity);
+      if (time >= this.kurupiDashEnd) {
         boss.leaping = false;
         body.setVelocity(0, 0);
+        this.nextKurupiDash = time + 1400;
       }
       return;
     }
     boss.chase(target);
     if (!boss.triggered) return;
     if (time < this.nextKurupiDash) return;
-    this.nextKurupiDash = time + 1600;
     boss.leaping = true;
-    this.acrobatLeapEnd = time + 380;
+    this.kurupiDashEnd = time + 420;
     const angle = Phaser.Math.Angle.Between(boss.x, boss.y, target.x, target.y);
-    const body = boss.body as Phaser.Physics.Arcade.Body;
-    this.physics.velocityFromRotation(angle, Math.max(420, boss.moveSpeed * 8), body.velocity);
+    this.physics.velocityFromRotation(angle, Math.max(520, boss.moveSpeed * 10), body.velocity);
   }
 
   private updatePoisonerTrail(boss: Enemy, time: number): void {
@@ -1449,15 +1497,16 @@ export class GameScene extends Phaser.Scene {
 
   private redrawAmuletBadges(): void {
     this.amuletBadges.removeAll(true);
+    const hudTextY = this.playerCount === 2 ? 74 : 52;
+    const y = hudTextY + 26;
     this.amulets.owned.forEach((id, index) => {
       const amulet = getAmulet(id);
-      const x = 330 + index * 44;
-      const y = 25;
-      const badge = this.add.circle(x, y, 16, COLORS.accent).setStrokeStyle(2, 0xffe8a3);
+      const x = 24 + index * 40;
+      const badge = this.add.circle(x, y, 15, COLORS.accent).setStrokeStyle(2, 0xffe8a3);
       const symbol = this.add
         .text(x, y, amulet.symbol, {
           fontFamily: 'Georgia, "Times New Roman", serif',
-          fontSize: '13px',
+          fontSize: '12px',
           color: '#0d1a12',
         })
         .setOrigin(0.5);
