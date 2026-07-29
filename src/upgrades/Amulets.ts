@@ -1,4 +1,3 @@
-import Phaser from 'phaser';
 import type { AmuletDef, AmuletId, MoonRarity } from '../data/types';
 
 export const AMULETS: AmuletDef[] = [
@@ -19,6 +18,24 @@ export const AMULETS: AmuletDef[] = [
     symbol: 'V',
     rarity: 1,
     textureKey: 'amulet_jaci',
+  },
+  {
+    id: 'jurupari_side_right',
+    name: 'Presa Direita de Jurupari',
+    description: 'Também dispara um projétil para a direita da mira.',
+    lore: 'A mandíbula direita do espírito morde quem tenta flanquear o caçador.',
+    symbol: '→',
+    rarity: 1,
+    textureKey: 'amulet_side_r',
+  },
+  {
+    id: 'jurupari_side_left',
+    name: 'Presa Esquerda de Jurupari',
+    description: 'Também dispara um projétil para a esquerda da mira.',
+    lore: 'A mandíbula esquerda guarda o lado que a noite esquece.',
+    symbol: '←',
+    rarity: 1,
+    textureKey: 'amulet_side_l',
   },
   {
     id: 'anhanga_circle',
@@ -83,6 +100,46 @@ export const AMULETS: AmuletDef[] = [
     rarity: 4,
     textureKey: 'amulet_storm',
   },
+  {
+    id: 'jaci_halfmoon',
+    name: 'Meia-Lua de Jaci',
+    description: 'O XP necessário para cada nível seguinte é dividido ao meio.',
+    lore: 'Jaci cortou a curva da noite: o caminho do saber ficou mais curto.',
+    symbol: '☽',
+    rarity: 4,
+    textureKey: 'amulet_halfmoon',
+  },
+  {
+    id: 'cura_veil',
+    name: 'Véu de Cura',
+    description: 'Efeitos negativos (veneno, sangramento, letargia, tontura) duram bem menos.',
+    lore: 'A bruma da cura envolve o corpo: a noite ainda fere, mas passa mais depressa.',
+    symbol: '◇',
+    rarity: 3,
+    textureKey: 'amulet_cura',
+  },
+  {
+    id: 'yara_vigil',
+    name: 'Vigília de Iara',
+    description:
+      'Com o aliado caído, fique sobre ele até a barra encher e traga-o de volta (só em combate).',
+    lore: 'A correnteza segura o corpo até o fôlego voltar — se você não abandonar a margem.',
+    symbol: '≈',
+    rarity: 4,
+    textureKey: 'amulet_vigil',
+    coopOnly: true,
+  },
+  {
+    id: 'anhanga_mercy',
+    name: 'Misericórdia de Anhangá',
+    description: 'Revive o aliado caído. A cada uso, o chamado fica mais raro.',
+    lore: 'Anhangá concede uma segunda chance — e cada súplica custa mais luar.',
+    symbol: '✝',
+    rarity: 1,
+    textureKey: 'amulet_mercy',
+    coopOnly: true,
+    specialOffer: true,
+  },
 ];
 
 const RARITY_WEIGHT: Record<MoonRarity, number> = {
@@ -103,8 +160,36 @@ export function getAmulet(id: AmuletId): AmuletDef {
   return amulet;
 }
 
-export function pickAmulets(owned: AmuletId[], count = 3): AmuletDef[] {
-  const available = AMULETS.filter((amulet) => !owned.includes(amulet.id));
+export function mercyOfferRarity(uses: number): MoonRarity {
+  if (uses < 2) return 1;
+  if (uses < 3) return 2;
+  if (uses < 4) return 3;
+  if (uses < 5) return 4;
+  return 5;
+}
+
+export interface PickAmuletContext {
+  coop: boolean;
+  allyDead: boolean;
+  mercyUses: number;
+  /** Partida virou solo após abandono — sem amuletos de aliado */
+  soloAfterPeerLeft?: boolean;
+}
+
+export function pickAmulets(
+  owned: AmuletId[],
+  count = 3,
+  ctx: PickAmuletContext = { coop: false, allyDead: false, mercyUses: 0 },
+): AmuletDef[] {
+  const available = AMULETS.filter((amulet) => {
+    if (amulet.specialOffer) return false;
+    if (amulet.coopOnly) {
+      if (!ctx.coop || ctx.soloAfterPeerLeft) return false;
+    }
+    if (owned.includes(amulet.id)) return false;
+    return true;
+  });
+
   const picked: AmuletDef[] = [];
   const pool = [...available];
 
@@ -124,5 +209,14 @@ export function pickAmulets(owned: AmuletId[], count = 3): AmuletDef[] {
     pool.splice(index, 1);
   }
 
-  return Phaser.Utils.Array.Shuffle(picked);
+  // Oferta especial de misericórdia se aliado morto
+  if (ctx.coop && ctx.allyDead && !ctx.soloAfterPeerLeft) {
+    const mercy = getAmulet('anhanga_mercy');
+    const rarity = mercyOfferRarity(ctx.mercyUses);
+    const offer: AmuletDef = { ...mercy, rarity };
+    if (picked.length >= count) picked[picked.length - 1] = offer;
+    else picked.push(offer);
+  }
+
+  return picked;
 }

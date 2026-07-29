@@ -340,6 +340,28 @@ class AuthServiceImpl {
     }
   }
 
+  async setMuralVisibility(visibility: 'public' | 'anonymous' | 'invisible'): Promise<void> {
+    const profile = SaveManager.load();
+    let alias = profile.prefs?.muralAlias;
+    if (visibility === 'anonymous' && !alias) {
+      const { stableTreeAlias } = await import('../utils/treeNames');
+      alias = stableTreeAlias(this.user?.id || this.username() || 'local');
+    }
+    profile.prefs = {
+      ...profile.prefs,
+      showNameTag: profile.prefs?.showNameTag ?? false,
+      muralVisibility: visibility,
+      muralAlias: alias,
+    };
+    SaveManager.save(profile, { skipCloud: true });
+    if (this.user) {
+      await pushProfileFlags(this.user.id, {
+        mural_visibility: visibility,
+        mural_alias: alias ?? null,
+      });
+    }
+  }
+
   /**
    * Zera o progresso de jogo da conta (local + nuvem). Só para admin/dev.
    * Não apaga usuário, senha, e-mail nem role.

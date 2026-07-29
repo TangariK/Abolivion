@@ -15,6 +15,8 @@ export interface CloudProfileRow {
   has_real_email: boolean | null;
   accept_newsletter: boolean | null;
   show_name_tag: boolean | null;
+  mural_visibility: string | null;
+  mural_alias: string | null;
   currency: number;
   meta_levels: Profile['metaLevels'];
   almanac: Profile['almanac'];
@@ -50,6 +52,10 @@ export function mergeProfiles(local: Profile, cloud: Partial<Profile>): Profile 
       speed: Math.max(local.metaLevels.speed, cloud.metaLevels?.speed ?? 0),
       damage: Math.max(local.metaLevels.damage, cloud.metaLevels?.damage ?? 0),
       fireRate: Math.max(local.metaLevels.fireRate, cloud.metaLevels?.fireRate ?? 0),
+      xpEfficiency: Math.max(
+        local.metaLevels.xpEfficiency ?? 0,
+        cloud.metaLevels?.xpEfficiency ?? 0,
+      ),
     },
     almanac: {
       enemies: union(local.almanac.enemies, cloud.almanac?.enemies ?? []),
@@ -57,6 +63,7 @@ export function mergeProfiles(local: Profile, cloud: Partial<Profile>): Profile 
       upgrades: union(local.almanac.upgrades, cloud.almanac?.upgrades ?? []),
       bosses: union(local.almanac.bosses, cloud.almanac?.bosses ?? []),
       achievements: union(local.almanac.achievements, cloud.almanac?.achievements ?? []),
+      emblems: union(local.almanac.emblems ?? [], cloud.almanac?.emblems ?? []),
     },
     bestScores: {
       infiniteMs: Math.max(localBest.infiniteMs, cloudBest.infiniteMs),
@@ -70,10 +77,17 @@ export function mergeProfiles(local: Profile, cloud: Partial<Profile>): Profile 
       lowestHpSurvive: mergeLowestHp(localBest.lowestHpSurvive, cloudBest.lowestHpSurvive),
       bestAccuracy: Math.max(localBest.bestAccuracy ?? 0, cloudBest.bestAccuracy ?? 0),
     },
-    // Preferências da conta: nuvem manda
+    // Preferências da conta: nuvem manda (áudio fica só no aparelho)
     prefs: {
       showNameTag: cloud.prefs?.showNameTag ?? local.prefs?.showNameTag ?? false,
       acceptNewsletter: cloud.prefs?.acceptNewsletter ?? local.prefs?.acceptNewsletter ?? false,
+      musicVolume: local.prefs?.musicVolume ?? 0.7,
+      sfxVolume: local.prefs?.sfxVolume ?? 0.8,
+      musicEnabled: local.prefs?.musicEnabled ?? true,
+      sfxEnabled: local.prefs?.sfxEnabled ?? true,
+      muralVisibility:
+        cloud.prefs?.muralVisibility ?? local.prefs?.muralVisibility ?? 'public',
+      muralAlias: cloud.prefs?.muralAlias ?? local.prefs?.muralAlias,
     },
   };
 }
@@ -99,6 +113,7 @@ export function rowToProfile(row: CloudProfileRow): Profile {
       speed: row.meta_levels?.speed ?? 0,
       damage: row.meta_levels?.damage ?? 0,
       fireRate: row.meta_levels?.fireRate ?? 0,
+      xpEfficiency: row.meta_levels?.xpEfficiency ?? 0,
     },
     almanac: {
       enemies: row.almanac?.enemies ?? [],
@@ -106,6 +121,7 @@ export function rowToProfile(row: CloudProfileRow): Profile {
       upgrades: row.almanac?.upgrades ?? [],
       bosses: row.almanac?.bosses ?? [],
       achievements: row.almanac?.achievements ?? [],
+      emblems: row.almanac?.emblems ?? [],
     },
     bestScores: {
       infiniteMs: row.best_scores?.infiniteMs ?? 0,
@@ -122,6 +138,15 @@ export function rowToProfile(row: CloudProfileRow): Profile {
     prefs: {
       showNameTag: row.show_name_tag ?? false,
       acceptNewsletter: row.accept_newsletter ?? false,
+      musicVolume: 0.7,
+      sfxVolume: 0.8,
+      musicEnabled: true,
+      sfxEnabled: true,
+      muralVisibility:
+        row.mural_visibility === 'anonymous' || row.mural_visibility === 'invisible'
+          ? row.mural_visibility
+          : 'public',
+      muralAlias: row.mural_alias ?? undefined,
     },
   };
 }
@@ -191,10 +216,15 @@ export async function pullAndMergeCloudProfile(userId: string): Promise<Profile>
     merged = mergeProfiles(accountSeed, cloud);
   }
 
-  // Prefs da conta sempre da nuvem
+  // Prefs da conta sempre da nuvem; áudio preservado do aparelho
+  const localAudio = SaveManager.load().prefs;
   merged.prefs = {
     showNameTag: cloud.prefs?.showNameTag ?? false,
     acceptNewsletter: cloud.prefs?.acceptNewsletter ?? false,
+    musicVolume: localAudio?.musicVolume ?? 0.7,
+    sfxVolume: localAudio?.sfxVolume ?? 0.8,
+    musicEnabled: localAudio?.musicEnabled ?? true,
+    sfxEnabled: localAudio?.sfxEnabled ?? true,
   };
 
   SaveManager.save(merged, { skipCloud: true });
@@ -214,6 +244,8 @@ export async function pushCloudProfile(userId: string, profile: Profile): Promis
     best_scores: profile.bestScores ?? emptyBestScores(),
     show_name_tag: profile.prefs?.showNameTag ?? false,
     accept_newsletter: profile.prefs?.acceptNewsletter ?? false,
+    mural_visibility: profile.prefs?.muralVisibility ?? 'public',
+    mural_alias: profile.prefs?.muralAlias ?? null,
     profile_version: profile.version,
   };
 
@@ -227,7 +259,14 @@ export async function pushCloudProfile(userId: string, profile: Profile): Promis
 export async function pushProfileFlags(
   userId: string,
   flags: Partial<
-    Pick<CloudProfileRow, 'show_name_tag' | 'accept_newsletter' | 'has_real_email'>
+    Pick<
+      CloudProfileRow,
+      | 'show_name_tag'
+      | 'accept_newsletter'
+      | 'has_real_email'
+      | 'mural_visibility'
+      | 'mural_alias'
+    >
   >,
 ): Promise<void> {
   const supabase = getSupabase();

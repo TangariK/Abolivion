@@ -29,10 +29,12 @@ export const PLAYER_BASE = {
   speed: 200,
   damage: 10,
   fireRate: 400,
-  projectileSpeed: 450,
+  projectileSpeed: 640,
   radius: 14,
   xpPickupRadius: 28,
   xpGainBonus: 0,
+  poisonDamageMul: 1,
+  bleedDamageMul: 1,
 } as const;
 
 export const XP_CURVE = {

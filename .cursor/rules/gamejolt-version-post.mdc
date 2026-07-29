@@ -1,0 +1,16 @@
+---
+description: Ao fechar uma versão, texto Game Jolt (máx. 259 chars) no .md da versão
+alwaysApply: true
+---
+
+# Game Jolt — post de versão
+
+Sempre que uma versão for **fechada / gerada** (changelog + docs/versions + zip, ou o usuário pedir para gerar/publicar a versão):
+
+1. Escreva o texto do chat Game Jolt **dentro do arquivo** `docs/versions/X.Y.Z.md`, numa seção clara (ex.: `## Post Game Jolt`), pronto para copiar.
+2. No chat com o usuário, também mostre esse texto no final da resposta.
+3. **Limite duro: no máximo 259 caracteres** (espaços e pontuação contam). Confira o tamanho.
+4. Tom: direto, claro, para **jogadores leigos** — sem jargão técnico (sem “sync”, “host”, “Realtime”, “build”, nomes de arquivo, SQL, etc.).
+5. Foque só no que importa para quem joga: versão, novidade principal, aviso curto se algo ainda pode falhar, convite leve a feedback se couber.
+6. Não resuma o histórico inteiro; não copie o CHANGELOG.
+7. Se for só correção na mesma versão já anunciada, pergunte se quer post curtinho de atualização ou pule.

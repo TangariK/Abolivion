@@ -12,16 +12,18 @@ export class XPOrb extends Phaser.Physics.Arcade.Image {
     this.setVisible(false);
   }
 
-  spawn(x: number, y: number, xp: number): void {
+  spawn(x: number, y: number, xp: number, large = false): void {
     this.xpValue = xp;
     this.setPosition(x, y);
     this.setActive(true);
     this.setVisible(true);
-    this.setScale(0.85);
+    this.setScale(large ? 1.65 : 0.85);
+    if (large) this.setTint(0xc4f090);
+    else this.clearTint();
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.enable = true;
-    body.setCircle(8);
+    body.setCircle(large ? 14 : 8);
     body.reset(x, y);
     body.setVelocity(0, 0);
   }

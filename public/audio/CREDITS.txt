@@ -1,0 +1,8 @@
+Abolivion — áudio via Freesound (previews HQ)
+Licenças filtradas para Creative Commons 0 (domínio público).
+Fonte: https://freesound.org
+
+public/audio/music/boss_acrobat.ogg
+  id=514178  author=danlucaz  name=80s Loop #4
+  https://freesound.org/people/danlucaz/sounds/514178/
+  license=http://creativecommons.org/publicdomain/zero/1.0/

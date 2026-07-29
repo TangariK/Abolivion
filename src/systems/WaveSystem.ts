@@ -4,6 +4,7 @@ import type { BossId, EnemyType } from '../data/types';
 import { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/GameConfig';
+import { shouldPromoteElite } from './EliteScaling';
 
 export type WavePhase = 'combat' | 'break' | 'idle';
 
@@ -44,7 +45,7 @@ export class WaveSystem {
     this.singleWave = options?.singleWave ?? false;
     this.enemies = scene.physics.add.group({
       classType: Enemy,
-      maxSize: 250,
+      maxSize: 360,
       runChildUpdate: false,
     });
   }
@@ -54,6 +55,7 @@ export class WaveSystem {
   }
 
   update(delta: number): void {
+    if (!this.enemies) return;
     if (this.phase === 'break') {
       this.intermissionMs -= delta;
       if (this.intermissionMs <= 0) this.beginNextWave();
@@ -62,15 +64,14 @@ export class WaveSystem {
 
     if (this.phase !== 'combat') return;
 
-    const children = this.enemies.getChildren() as Enemy[];
-    for (const enemy of children) {
-      if (!enemy.active) continue;
-      enemy.chase(this.player);
+    let children: Enemy[] = [];
+    try {
+      if (!this.enemies.children) return;
+      children = this.enemies.getChildren() as Enemy[];
+    } catch {
+      return;
     }
-
-    // Sync remaining with live actives (boss summons can increase count)
     this.remaining = children.filter((e) => e.active).length;
-    // Ignore the first ~250ms so a failed/slow spawn doesn't instantly clear the wave
     if (
       this.remaining <= 0
       && this.totalInWave > 0
@@ -84,15 +85,14 @@ export class WaveSystem {
     }
   }
 
-  notifyKill(): void {
-    // remaining is recomputed each update; kept for API clarity
-  }
+  notifyKill(): void {}
 
-  spawnExtra(type: EnemyType): void {
-    const pos = this.spawnPositionOutsideCamera();
+  spawnExtra(type: EnemyType, at?: { x: number; y: number }): void {
+    const pos = at ?? this.spawnPositionOutsideCamera();
     const enemy = this.enemies.get() as Enemy | null;
     if (!enemy) return;
     enemy.spawn(pos.x, pos.y, type);
+    if (shouldPromoteElite(this.wave)) enemy.promoteElite();
     this.onEncounter(type);
     this.totalInWave += 1;
   }
@@ -111,8 +111,20 @@ export class WaveSystem {
       this.spawnBoss('boitata_gaze');
       return;
     }
+    if (this.wave === 30) {
+      this.spawnBoss('wolf_king');
+      return;
+    }
+    if (this.wave === 40) {
+      this.spawnBoss('poisoner_master');
+      return;
+    }
+    if (this.wave === 50) {
+      this.spawnBoss('acrobat_leap');
+      return;
+    }
 
-    const count = Math.min(8 + this.wave * 3, 48);
+    const count = Math.min(8 + this.wave * 3, 78);
     let spawned = 0;
     for (let i = 0; i < count; i++) {
       if (this.spawnOne()) spawned += 1;
@@ -141,12 +153,24 @@ export class WaveSystem {
 
   private spawnOne(): boolean {
     const type = this.pickType();
-    const pos = this.spawnPositionOutsideCamera();
+    const near = type.startsWith('camo_') && Math.random() < 0.85;
+    const pos = near ? this.spawnNearPlayer() : this.spawnPositionOutsideCamera();
     const enemy = this.enemies.get() as Enemy | null;
     if (!enemy) return false;
     enemy.spawn(pos.x, pos.y, type);
+    if (shouldPromoteElite(this.wave)) enemy.promoteElite();
     this.onEncounter(type);
     return true;
+  }
+
+  private spawnNearPlayer(): { x: number; y: number } {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Phaser.Math.Between(70, 140);
+    let x = this.player.x + Math.cos(angle) * dist;
+    let y = this.player.y + Math.sin(angle) * dist;
+    x = Phaser.Math.Clamp(x, 40, WORLD_WIDTH - 40);
+    y = Phaser.Math.Clamp(y, 40, WORLD_HEIGHT - 40);
+    return { x, y };
   }
 
   private pickType(): EnemyType {
@@ -157,26 +181,42 @@ export class WaveSystem {
       return roll < 0.7 ? 'fast' : 'normal';
     }
     if (w <= 4) {
-      if (roll < 0.45) return 'fast';
-      if (roll < 0.75) return 'normal';
-      if (roll < 0.9) return 'swift';
-      return 'bruiser';
+      if (roll < 0.38) return 'fast';
+      if (roll < 0.6) return 'normal';
+      if (roll < 0.75) return 'swift';
+      if (roll < 0.88) return 'bruiser';
+      if (roll < 0.95) return 'backstabber';
+      return 'dire_wolf_pup';
     }
     if (w <= 8) {
-      if (roll < 0.25) return 'fast';
-      if (roll < 0.45) return 'swift';
-      if (roll < 0.65) return 'normal';
-      if (roll < 0.8) return 'armored';
-      if (roll < 0.92) return 'bruiser';
-      return 'tank';
+      if (roll < 0.18) return 'fast';
+      if (roll < 0.3) return 'swift';
+      if (roll < 0.42) return 'normal';
+      if (roll < 0.54) return 'armored';
+      if (roll < 0.64) return 'bruiser';
+      if (roll < 0.72) return 'tank';
+      if (roll < 0.8) return 'poisoner';
+      if (roll < 0.88) return 'dire_wolf';
+      if (roll < 0.94) return 'backstabber';
+      return 'camo_normal';
     }
-    // late waves
-    if (roll < 0.15) return 'fast';
-    if (roll < 0.35) return 'swift';
-    if (roll < 0.5) return 'normal';
-    if (roll < 0.7) return 'armored';
-    if (roll < 0.85) return 'bruiser';
-    return 'tank';
+    if (roll < 0.1) return 'fast';
+    if (roll < 0.2) return 'swift';
+    if (roll < 0.3) return 'normal';
+    if (roll < 0.4) return 'armored';
+    if (roll < 0.5) return 'bruiser';
+    if (roll < 0.58) return 'tank';
+    if (roll < 0.66) return 'dire_wolf';
+    if (roll < 0.72) return 'dire_wolf_brute';
+    if (roll < 0.76) return 'dire_wolf_pup';
+    if (roll < 0.82) return 'backstabber';
+    if (roll < 0.86) return 'camo_normal';
+    if (roll < 0.89) return 'camo_blade';
+    if (roll < 0.92) return 'camo_poison';
+    if (roll < 0.94) return 'camo_toxic_blade';
+    if (roll < 0.97) return 'lethargy_spitter';
+    if (roll < 0.99) return 'lethargy_brute';
+    return 'poisoner';
   }
 
   private spawnPositionOutsideCamera(): { x: number; y: number } {
@@ -210,7 +250,5 @@ export class WaveSystem {
     return { x, y };
   }
 
-  destroy(): void {
-    // no timers owned
-  }
+  destroy(): void {}
 }

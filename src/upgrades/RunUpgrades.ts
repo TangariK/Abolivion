@@ -67,6 +67,22 @@ export const RUN_UPGRADES: RunUpgradeDef[] = [
       stats.xpGainBonus += 0.25;
     },
   },
+  {
+    id: 'poison_ward',
+    name: 'Seiva Antídoto',
+    description: 'Reduz o dano do veneno em 35%',
+    apply: (stats: PlayerStats) => {
+      stats.poisonDamageMul = Math.max(0.15, (stats.poisonDamageMul ?? 1) * 0.65);
+    },
+  },
+  {
+    id: 'bleed_ward',
+    name: 'Ligadura da Aldeia',
+    description: 'Reduz o dano do sangramento em 35%',
+    apply: (stats: PlayerStats) => {
+      stats.bleedDamageMul = Math.max(0.15, (stats.bleedDamageMul ?? 1) * 0.65);
+    },
+  },
 ];
 
 export function pickRandomUpgrades(count: number): RunUpgradeDef[] {

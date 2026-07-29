@@ -6,9 +6,32 @@ export type EnemyType =
   | 'tank'
   | 'armored'
   | 'swift'
-  | 'bruiser';
+  | 'bruiser'
+  | 'poisoner'
+  | 'dire_wolf'
+  | 'dire_wolf_brute'
+  | 'dire_wolf_pup'
+  | 'backstabber'
+  | 'camo_normal'
+  | 'camo_blade'
+  | 'camo_poison'
+  | 'camo_toxic_blade'
+  | 'lethargy_spitter'
+  | 'lethargy_brute';
 
-export type BossId = 'kurupi_brood' | 'boitata_gaze';
+export type BossId =
+  | 'kurupi_brood'
+  | 'boitata_gaze'
+  | 'wolf_king'
+  | 'poisoner_master'
+  | 'acrobat_leap';
+
+export type EmblemId =
+  | 'emblem_kurupi'
+  | 'emblem_boitata'
+  | 'emblem_wolf'
+  | 'emblem_poison'
+  | 'emblem_acrobat';
 
 export type RunUpgradeId =
   | 'hp_up'
@@ -18,7 +41,9 @@ export type RunUpgradeId =
   | 'fire_rate'
   | 'proj_speed'
   | 'xp_magnet'
-  | 'xp_gain';
+  | 'xp_gain'
+  | 'poison_ward'
+  | 'bleed_ward';
 
 export type AmuletId =
   | 'araci_eyes'
@@ -29,7 +54,13 @@ export type AmuletId =
   | 'yara_tear'
   | 'cuca_thorn'
   | 'caipora_echo'
-  | 'tupa_storm';
+  | 'tupa_storm'
+  | 'jurupari_side_right'
+  | 'jurupari_side_left'
+  | 'anhanga_mercy'
+  | 'yara_vigil'
+  | 'jaci_halfmoon'
+  | 'cura_veil';
 
 export type AchievementTier = 'normal' | 'secret' | 'tribal' | 'ancestral';
 
@@ -64,10 +95,17 @@ export type AchievementId =
   | 'endless_dawn'
   | 'free_trial'
   | 'triple_tyrants'
-  | 'naked_trial';
+  | 'naked_trial'
+  | 'online_first_fire'
+  | 'online_tribe_bond'
+  | 'online_ally_rise'
+  | 'online_vigil'
+  | 'online_open_room';
 
 /** Moon rarity for amulets: 1 (common) .. 5 (mythic) */
 export type MoonRarity = 1 | 2 | 3 | 4 | 5;
+
+export type StatusEffectId = 'poison' | 'bleed' | 'lethargy' | 'dizzy';
 
 export interface PlayerStats {
   maxHp: number;
@@ -78,6 +116,10 @@ export interface PlayerStats {
   projectileSpeed: number;
   xpPickupRadius: number;
   xpGainBonus: number;
+  /** Multiplicador do dano de DoT de veneno (1 = normal, 0.5 = metade). */
+  poisonDamageMul: number;
+  /** Multiplicador do dano de DoT de sangramento. */
+  bleedDamageMul: number;
 }
 
 export interface EnemyDef {
@@ -91,8 +133,22 @@ export interface EnemyDef {
   color: number;
   textureKey: string;
   description: string;
-  /** Extra armor layer before real HP (armored only) */
   armor?: number;
+  appliesPoison?: boolean;
+  bleedChance?: number;
+  /** Sempre tenta costas / contorna quando olhado. */
+  preferBackstab?: boolean;
+  /** Quase invisível; spawn perto do player. */
+  camouflaged?: boolean;
+  /** Aplica Letargia (lento) ao contato. */
+  appliesLethargy?: boolean;
+  /** Letargia + DoT leve (veneno roxo com dano). */
+  lethargyDamaging?: boolean;
+}
+
+export interface BossTriggeredMode {
+  name: string;
+  description: string;
 }
 
 export interface BossDef {
@@ -107,6 +163,17 @@ export interface BossDef {
   xp: number;
   radius: number;
   wave: number;
+  triggeredMode: BossTriggeredMode;
+}
+
+export interface EmblemDef {
+  id: EmblemId;
+  bossId: BossId;
+  name: string;
+  howObtained: string;
+  lore: string;
+  effectText: string;
+  textureKey: string;
 }
 
 export interface RunUpgradeDef {
@@ -124,6 +191,8 @@ export interface AmuletDef {
   symbol: string;
   rarity: MoonRarity;
   textureKey: string;
+  coopOnly?: boolean;
+  specialOffer?: boolean;
 }
 
 export interface AchievementDef {
@@ -144,9 +213,16 @@ export interface RunAmuletState {
   thorns: boolean;
   backwardShot: boolean;
   lightningStorm: boolean;
+  sideShotRight: boolean;
+  sideShotLeft: boolean;
+  allyChannelRevive: boolean;
+  xpHalf: boolean;
+  /** Duração de debuffs × este valor (&lt; 1 = mais curto). */
+  debuffDurationMul: number;
+  mercyUses: number;
 }
 
-export type MetaUpgradeId = 'maxHp' | 'speed' | 'damage' | 'fireRate';
+export type MetaUpgradeId = 'maxHp' | 'speed' | 'damage' | 'fireRate' | 'xpEfficiency';
 
 export interface MetaUpgradeDef {
   id: MetaUpgradeId;
@@ -166,28 +242,34 @@ export interface Profile {
     upgrades: RunUpgradeId[];
     bosses: BossId[];
     achievements: AchievementId[];
+    emblems: EmblemId[];
   };
   bestScores?: {
     infiniteMs: number;
     wavesReached: number;
     kills: number;
     bestLevel: number;
-    /** Tempo total acumulado em runs (ms). */
     totalPlayMs?: number;
     bestKillStreak?: number;
     bossesDefeated?: number;
     totalCoinsEarned?: number;
-    /** Menor HP com que terminou uma run ainda vivo. */
     lowestHpSurvive?: number;
     bestAccuracy?: number;
   };
   prefs?: {
     showNameTag: boolean;
     acceptNewsletter?: boolean;
+    musicVolume?: number;
+    sfxVolume?: number;
+    musicEnabled?: boolean;
+    sfxEnabled?: boolean;
+    /** Participação no Mural da Tribo */
+    muralVisibility?: 'public' | 'anonymous' | 'invisible';
+    /** Alias fixo quando anônimo (árvore_NN) */
+    muralAlias?: string;
   };
 }
 
-/** Sandbox configuration chosen on the Free Mode setup screen. */
 export interface FreeModeConfig {
   baseKind: 'wave' | 'infinite' | 'custom';
   wave: number;
@@ -212,4 +294,13 @@ export interface RunSummary {
   bossesDefeated?: BossId[];
   freeMode?: boolean;
   victory?: boolean;
+  online?: boolean;
+}
+
+export interface StatusHudEntry {
+  id: StatusEffectId;
+  label: string;
+  color: string;
+  remainingMs: number;
+  totalMs: number;
 }

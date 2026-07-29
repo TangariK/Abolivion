@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config/GameConfig';
+import { GameSettingsStore } from '../data/GameModeStore';
 import type { RunSummary } from '../data/types';
 import { SaveManager } from '../upgrades/MetaUpgrades';
 import { formatDuration } from '../utils/formatDuration';
@@ -47,6 +48,7 @@ export class GameOverScene extends Phaser.Scene {
 
     const lines = [
       `Modo: ${modeLabel}`,
+      ...(this.summary.online ? ['Partida online'] : []),
       `Nível alcançado: ${this.summary.level}`,
       ...(this.summary.waveReached
         ? [`Rodada alcançada: ${this.summary.waveReached}`]
@@ -72,13 +74,36 @@ export class GameOverScene extends Phaser.Scene {
         .setOrigin(0.5);
     });
 
-    this.makeButton(GAME_WIDTH / 2 - 150, GAME_HEIGHT - 100, 'TENTAR DE NOVO', () => {
-      this.scene.start('GameScene');
-    });
+    const online = Boolean(this.summary.online) || GameSettingsStore.isOnline();
 
-    this.makeButton(GAME_WIDTH / 2 + 150, GAME_HEIGHT - 100, 'MENU', () => {
-      this.scene.start('MenuScene');
-    });
+    if (online) {
+      this.add
+        .text(
+          GAME_WIDTH / 2,
+          GAME_HEIGHT - 160,
+          'Online: a sala encerrou. Crie ou entre em outra pelo menu.',
+          {
+            fontFamily: 'Segoe UI, Tahoma, sans-serif',
+            fontSize: '15px',
+            color: '#a8c0a8',
+            align: 'center',
+            wordWrap: { width: 520 },
+          },
+        )
+        .setOrigin(0.5);
+
+      this.makeButton(GAME_WIDTH / 2, GAME_HEIGHT - 100, 'MENU', () => {
+        this.scene.start('MenuScene');
+      });
+    } else {
+      this.makeButton(GAME_WIDTH / 2 - 150, GAME_HEIGHT - 100, 'TENTAR DE NOVO', () => {
+        this.scene.start('GameScene');
+      });
+
+      this.makeButton(GAME_WIDTH / 2 + 150, GAME_HEIGHT - 100, 'MENU', () => {
+        this.scene.start('MenuScene');
+      });
+    }
   }
 
   private makeButton(x: number, y: number, label: string, onClick: () => void): void {

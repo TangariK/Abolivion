@@ -197,6 +197,38 @@ export const ACHIEVEMENTS: AchievementDef[] = [
       'No Modo Livre, vença os três chefões de uma vez sem amuletos, buffs ou melhorias permanentes.',
     tier: 'ancestral',
   },
+
+  // —— Online ——
+  {
+    id: 'online_first_fire',
+    name: 'Primeira Fogueira',
+    description: 'Entre em uma partida online com outro jogador.',
+    tier: 'normal',
+  },
+  {
+    id: 'online_tribe_bond',
+    name: 'Elo da Tribo',
+    description: 'Sobreviva 3 minutos online com os dois caçadores vivos.',
+    tier: 'normal',
+  },
+  {
+    id: 'online_ally_rise',
+    name: 'Não Abandonei',
+    description: 'Reviva o aliado uma vez no modo online.',
+    tier: 'secret',
+  },
+  {
+    id: 'online_vigil',
+    name: 'Vigília Compartilhada',
+    description: 'Reviva o aliado com a Vigília de Iara no online.',
+    tier: 'tribal',
+  },
+  {
+    id: 'online_open_room',
+    name: 'Sala Lotada',
+    description: 'Crie uma sala pública e receba outro jogador.',
+    tier: 'normal',
+  },
 ];
 
 /** Únicas conquistas que podem ser desbloqueadas dentro do Modo Livre. */

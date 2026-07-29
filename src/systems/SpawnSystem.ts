@@ -3,6 +3,8 @@ import type { EnemyType } from '../data/types';
 import { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/GameConfig';
+import { eliteChanceFromElapsedMs, shouldPromoteElite } from './EliteScaling';
+import { intelFromElapsedMs } from './EnemyFlankAI';
 
 export class SpawnSystem {
   private scene: Phaser.Scene;
@@ -22,19 +24,22 @@ export class SpawnSystem {
     this.onEncounter = onEncounter;
     this.enemies = scene.physics.add.group({
       classType: Enemy,
-      maxSize: 220,
+      maxSize: 360,
       runChildUpdate: false,
     });
   }
 
-  /** Começa a run como se já tivessem passado `ms` (Modo Livre). */
+  getElapsed(): number {
+    return this.elapsed;
+  }
+
   seedElapsed(ms: number): void {
     this.elapsed = Math.max(0, ms);
   }
 
   start(): void {
     this.spawnTimer = this.scene.time.addEvent({
-      delay: 800,
+      delay: 750,
       loop: true,
       callback: () => this.tick(),
     });
@@ -42,30 +47,60 @@ export class SpawnSystem {
 
   update(delta: number): void {
     this.elapsed += delta;
-    const children = this.enemies.getChildren() as Enemy[];
-    for (const enemy of children) {
-      if (enemy.active) enemy.chase(this.player);
-    }
+  }
+
+  softCap(): number {
+    const minutes = this.elapsed / 60000;
+    return Math.min(140, Math.floor(40 + minutes * 18));
+  }
+
+  activeCount(): number {
+    return (this.enemies.getChildren() as Enemy[]).filter((e) => e.active).length;
   }
 
   private tick(): void {
     if (!this.player.active || this.player.isDead()) return;
 
     const minutes = this.elapsed / 60000;
-    const batch = Math.min(1 + Math.floor(minutes * 2), 6);
+    const batch = Math.min(1 + Math.floor(minutes * 2.2), 8);
+    const cap = this.softCap();
 
     for (let i = 0; i < batch; i++) {
+      if (this.activeCount() >= cap) break;
       this.spawnOne();
     }
   }
 
   private spawnOne(): void {
     const type = this.pickType();
-    const pos = this.spawnPositionOutsideCamera();
+    const nearPlayer = this.shouldSpawnNear(type);
+    const pos = nearPlayer
+      ? this.spawnNearPlayer()
+      : this.spawnPositionOutsideCamera();
     const enemy = this.enemies.get() as Enemy | null;
     if (!enemy) return;
     enemy.spawn(pos.x, pos.y, type);
+    if (shouldPromoteElite(eliteChanceFromElapsedMs(this.elapsed), 'chance')) {
+      enemy.promoteElite();
+    }
     this.onEncounter?.(type);
+  }
+
+  private shouldSpawnNear(type: EnemyType): boolean {
+    if (type.startsWith('camo_')) return Math.random() < 0.92;
+    if (this.elapsed < 100_000) return false;
+    const intel = intelFromElapsedMs(this.elapsed);
+    return Math.random() < 0.15 + intel * 0.35;
+  }
+
+  private spawnNearPlayer(): { x: number; y: number } {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Phaser.Math.Between(70, 140);
+    let x = this.player.x + Math.cos(angle) * dist;
+    let y = this.player.y + Math.sin(angle) * dist;
+    x = Phaser.Math.Clamp(x, 40, WORLD_WIDTH - 40);
+    y = Phaser.Math.Clamp(y, 40, WORLD_HEIGHT - 40);
+    return { x, y };
   }
 
   private pickType(): EnemyType {
@@ -75,25 +110,45 @@ export class SpawnSystem {
       return roll < 0.65 ? 'fast' : 'normal';
     }
     if (t < 55) {
-      if (roll < 0.35) return 'fast';
-      if (roll < 0.55) return 'swift';
-      if (roll < 0.8) return 'normal';
-      return 'bruiser';
+      if (roll < 0.28) return 'fast';
+      if (roll < 0.44) return 'swift';
+      if (roll < 0.6) return 'normal';
+      if (roll < 0.72) return 'bruiser';
+      if (roll < 0.82) return 'dire_wolf';
+      if (roll < 0.9) return 'backstabber';
+      return 'poisoner';
     }
     if (t < 100) {
-      if (roll < 0.2) return 'fast';
-      if (roll < 0.4) return 'swift';
-      if (roll < 0.55) return 'normal';
-      if (roll < 0.75) return 'armored';
-      if (roll < 0.9) return 'bruiser';
-      return 'tank';
+      if (roll < 0.12) return 'fast';
+      if (roll < 0.24) return 'swift';
+      if (roll < 0.34) return 'normal';
+      if (roll < 0.44) return 'armored';
+      if (roll < 0.54) return 'bruiser';
+      if (roll < 0.62) return 'tank';
+      if (roll < 0.7) return 'dire_wolf';
+      if (roll < 0.76) return 'dire_wolf_pup';
+      if (roll < 0.82) return 'backstabber';
+      if (roll < 0.88) return 'camo_normal';
+      if (roll < 0.93) return 'lethargy_spitter';
+      return 'poisoner';
     }
-    if (roll < 0.15) return 'fast';
-    if (roll < 0.35) return 'swift';
-    if (roll < 0.5) return 'normal';
-    if (roll < 0.7) return 'armored';
-    if (roll < 0.85) return 'bruiser';
-    return 'tank';
+    if (roll < 0.08) return 'fast';
+    if (roll < 0.16) return 'swift';
+    if (roll < 0.26) return 'normal';
+    if (roll < 0.36) return 'armored';
+    if (roll < 0.44) return 'bruiser';
+    if (roll < 0.52) return 'tank';
+    if (roll < 0.6) return 'dire_wolf';
+    if (roll < 0.66) return 'dire_wolf_brute';
+    if (roll < 0.7) return 'dire_wolf_pup';
+    if (roll < 0.76) return 'backstabber';
+    if (roll < 0.8) return 'camo_normal';
+    if (roll < 0.84) return 'camo_blade';
+    if (roll < 0.88) return 'camo_poison';
+    if (roll < 0.91) return 'camo_toxic_blade';
+    if (roll < 0.95) return 'lethargy_spitter';
+    if (roll < 0.98) return 'lethargy_brute';
+    return 'poisoner';
   }
 
   private spawnPositionOutsideCamera(): { x: number; y: number } {

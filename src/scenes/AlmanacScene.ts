@@ -6,12 +6,14 @@ import {
   isAchievementVisibleWhenLocked,
 } from '../data/Achievements';
 import { BOSS_DEFS, ENEMY_DEFS } from '../data/EnemyCatalog';
+import { EMBLEMS } from '../data/Emblems';
 import type { AchievementTier } from '../data/types';
 import { AMULETS, moonLabel } from '../upgrades/Amulets';
 import { SaveManager } from '../upgrades/MetaUpgrades';
 import { RUN_UPGRADES } from '../upgrades/RunUpgrades';
+import { AudioService } from '../services/AudioService';
 
-type AlmanacTab = 'amulets' | 'upgrades' | 'enemies' | 'bosses' | 'achievements';
+type AlmanacTab = 'amulets' | 'upgrades' | 'enemies' | 'bosses' | 'emblems' | 'achievements';
 
 interface AlmanacEntry {
   id: string;
@@ -69,6 +71,7 @@ export class AlmanacScene extends Phaser.Scene {
   }
 
   create(): void {
+    AudioService.bind(this);
     this.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x050806, 0.9)
       .setInteractive();
@@ -105,13 +108,17 @@ export class AlmanacScene extends Phaser.Scene {
       })
       .setOrigin(1, 0.5)
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.scene.stop());
+      .on('pointerdown', () => {
+        AudioService.playSfx('sfx_ui_back');
+        this.scene.stop();
+      });
 
     const tabs: Array<{ id: AlmanacTab; label: string; x: number }> = [
-      { id: 'amulets', label: 'Amuletos', x: 180 },
-      { id: 'upgrades', label: 'Melhorias', x: 360 },
-      { id: 'enemies', label: 'Inimigos', x: 540 },
-      { id: 'bosses', label: 'Chefões', x: 720 },
+      { id: 'amulets', label: 'Amuletos', x: 130 },
+      { id: 'upgrades', label: 'Melhorias', x: 280 },
+      { id: 'enemies', label: 'Inimigos', x: 430 },
+      { id: 'bosses', label: 'Chefões', x: 580 },
+      { id: 'emblems', label: 'Emblemas', x: 740 },
       { id: 'achievements', label: 'Conquistas', x: 920 },
     ];
     tabs.forEach((tab) => this.makeTab(tab.x, tab.label, tab.id));
@@ -165,18 +172,21 @@ export class AlmanacScene extends Phaser.Scene {
 
   private makeTab(x: number, label: string, tab: AlmanacTab): void {
     const bg = this.add
-      .rectangle(x, 150, 150, 36, 0x6e5a32)
+      .rectangle(x, 150, 128, 36, 0x6e5a32)
       .setStrokeStyle(1, COLORS.accent)
       .setInteractive({ useHandCursor: true });
     const text = this.add
       .text(x, 150, label, {
         fontFamily: 'Georgia, "Times New Roman", serif',
-        fontSize: '15px',
+        fontSize: '13px',
         color: '#f7edce',
       })
       .setOrigin(0.5);
 
-    bg.on('pointerdown', () => this.showTab(tab));
+    bg.on('pointerdown', () => {
+      AudioService.playSfx('sfx_page_turn');
+      this.showTab(tab);
+    });
     this.tabButtons.set(tab, { bg, label: text });
   }
 
@@ -241,10 +251,23 @@ export class AlmanacScene extends Phaser.Scene {
         title: boss.name,
         description: boss.description,
         lore: boss.lore,
-        detail: `Rodada ${boss.wave} · HP ${boss.hp} · Vel ${boss.speed} · Dano ${boss.damage}`,
+        detail:
+          `Rodada ${boss.wave} · HP ${boss.hp} · Vel ${boss.speed} · Dano ${boss.damage}\n\n`
+          + `Triggered Mode — ${boss.triggeredMode.name}\n${boss.triggeredMode.description}`,
         textureKey: boss.textureKey,
         unlocked: profile.almanac.bosses.includes(boss.id),
         symbol: 'B',
+      }));
+    } else if (tab === 'emblems') {
+      entries = EMBLEMS.map((e) => ({
+        id: e.id,
+        title: e.name,
+        description: e.howObtained,
+        lore: e.lore,
+        detail: `Efeito: ${e.effectText}`,
+        textureKey: e.textureKey,
+        unlocked: (profile.almanac.emblems ?? []).includes(e.id),
+        symbol: '✦',
       }));
     } else {
       entries = ACHIEVEMENTS.map((a) => {
@@ -295,7 +318,10 @@ export class AlmanacScene extends Phaser.Scene {
         .setOrigin(0, 0.5);
 
       this.rowHighlights.set(entry.id, row);
-      row.on('pointerdown', () => this.selectEntry(entry));
+      row.on('pointerdown', () => {
+        AudioService.playSfx('sfx_almanac_select');
+        this.selectEntry(entry);
+      });
       this.listContainer.add([row, text]);
     });
 

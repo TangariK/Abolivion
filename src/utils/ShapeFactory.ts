@@ -11,12 +11,36 @@ export class ShapeFactory {
     this.circle(scene, 'enemy_armored', 28, 0x7a8a9a);
     this.circle(scene, 'enemy_swift', 14, 0xff8a6a);
     this.circle(scene, 'enemy_bruiser', 30, 0xa31818);
+    this.circle(scene, 'enemy_poisoner', 26, 0x5a9a3a);
+    this.wolf(scene, 'enemy_dire_wolf', 26, 0x4a3a3a);
+    this.wolf(scene, 'enemy_dire_wolf_brute', 34, 0x2e2222);
+    this.wolf(scene, 'enemy_dire_wolf_pup', 18, 0x6a5555);
+    this.bladeEnemy(scene, 'enemy_backstabber', 24, 0x6a3030);
+    this.circle(scene, 'enemy_camo_normal', 22, 0x1a3324);
+    this.bladeEnemy(scene, 'enemy_camo_blade', 22, 0x243d2c);
+    this.circle(scene, 'enemy_camo_poison', 22, 0x2a3a22);
+    this.bladeEnemy(scene, 'enemy_camo_toxic_blade', 22, 0x1e2e24);
+    this.circle(scene, 'enemy_lethargy_spitter', 26, 0x7a5ab0);
+    this.circle(scene, 'enemy_lethargy_brute', 32, 0x5a3a90);
     this.circle(scene, 'projectile', 10, COLORS.projectile);
     this.circle(scene, 'boss_shot', 12, 0xff6b2d);
     this.hexagon(scene, 'xp_orb', 12, COLORS.xpOrb);
     this.circle(scene, 'dog_companion', 18, 0x9aa0a6);
     this.boss(scene, 'boss_kurupi', 72, 0x5c2a1a);
     this.boss(scene, 'boss_boitata', 64, 0xd45500);
+    this.wolf(scene, 'boss_wolf_king', 44, 0x1a1010);
+    this.boss(scene, 'boss_poisoner_master', 60, 0x3d6a28);
+    this.acrobat(scene, 'boss_acrobat', 56, 0xc4a06a);
+    this.circle(scene, 'poison_shot', 14, 0x6bc24a);
+    this.circle(scene, 'poison_shot_purple', 14, 0x9a6ad4);
+    this.circle(scene, 'poison_puddle', 8, 0x3d8a2a);
+    this.circle(scene, 'poison_puddle_purple', 8, 0x6a40a0);
+    this.rect(scene, 'boss_turret', 28, 40, 0xd47820);
+    this.emblem(scene, 'emblem_kurupi', 0x5c2a1a);
+    this.emblem(scene, 'emblem_boitata', 0xd45500);
+    this.emblem(scene, 'emblem_wolf', 0x4a3a3a);
+    this.emblem(scene, 'emblem_poison', 0x3d6a28);
+    this.emblem(scene, 'emblem_acrobat', 0xc4a06a);
     this.amuletIcon(scene, 'amulet_araci', COLORS.accent, 'parallel');
     this.amuletIcon(scene, 'amulet_jaci', 0xd4a017, 'diagonal');
     this.amuletIcon(scene, 'amulet_anhanga', 0x8f6b3a, 'ring');
@@ -26,6 +50,12 @@ export class ShapeFactory {
     this.amuletIcon(scene, 'amulet_cuca', 0xc45a3a, 'thorn');
     this.amuletIcon(scene, 'amulet_caipora', 0xb8d44a, 'echo');
     this.amuletIcon(scene, 'amulet_storm', 0x7ec8ff, 'storm');
+    this.amuletIcon(scene, 'amulet_side_r', 0xd4b86a, 'echo');
+    this.amuletIcon(scene, 'amulet_side_l', 0xb8a060, 'echo');
+    this.amuletIcon(scene, 'amulet_halfmoon', 0xe8d090, 'bolt');
+    this.amuletIcon(scene, 'amulet_vigil', 0x6ec8ff, 'drop');
+    this.amuletIcon(scene, 'amulet_mercy', 0xf4d77b, 'bolt');
+    this.amuletIcon(scene, 'amulet_cura', 0xa8e0c8, 'ring');
     this.hut(scene, 'hut', 80, 64);
     this.rect(scene, 'ground_tile', 64, 64, COLORS.grass);
   }
@@ -44,6 +74,30 @@ export class ShapeFactory {
     g.lineStyle(2, 0xffffff, 0.25);
     g.strokeCircle(r, r, r - 1);
     g.generateTexture(key, diameter, diameter);
+    g.destroy();
+  }
+
+  /** Lobo hostil — distinto do cão aliado (orelhas + focinho). */
+  private static wolf(
+    scene: Phaser.Scene,
+    key: string,
+    size: number,
+    color: number,
+  ): void {
+    if (scene.textures.exists(key)) return;
+    const g = scene.make.graphics({ x: 0, y: 0 });
+    const r = size / 2;
+    g.fillStyle(color, 1);
+    g.fillEllipse(r, r + size * 0.05, size * 0.9, size * 0.7);
+    g.fillTriangle(r - size * 0.35, r - size * 0.15, r - size * 0.15, r - size * 0.45, r - size * 0.05, r - size * 0.1);
+    g.fillTriangle(r + size * 0.35, r - size * 0.15, r + size * 0.15, r - size * 0.45, r + size * 0.05, r - size * 0.1);
+    g.fillStyle(0x1a1212, 1);
+    g.fillCircle(r - size * 0.12, r, size * 0.06);
+    g.fillCircle(r + size * 0.12, r, size * 0.06);
+    g.fillTriangle(r - size * 0.08, r + size * 0.12, r + size * 0.08, r + size * 0.12, r, r + size * 0.28);
+    g.lineStyle(2, 0xc4a35a, 0.5);
+    g.strokeEllipse(r, r + size * 0.05, size * 0.9, size * 0.7);
+    g.generateTexture(key, size, size);
     g.destroy();
   }
 
@@ -159,6 +213,64 @@ export class ShapeFactory {
     g.fillStyle(color, 1);
     g.fillPoints(points, true);
     g.generateTexture(key, size * 2, size * 2);
+    g.destroy();
+  }
+
+  private static bladeEnemy(
+    scene: Phaser.Scene,
+    key: string,
+    diameter: number,
+    color: number,
+  ): void {
+    if (scene.textures.exists(key)) return;
+    const g = scene.make.graphics({ x: 0, y: 0 });
+    const r = diameter / 2;
+    const w = diameter + 10;
+    g.fillStyle(color, 1);
+    g.fillCircle(r, r, r);
+    g.fillStyle(0xc0c8d0, 1);
+    g.fillTriangle(diameter - 2, r - 3, w, r, diameter - 2, r + 3);
+    g.lineStyle(2, 0xffffff, 0.2);
+    g.strokeCircle(r, r, r - 1);
+    g.generateTexture(key, w, diameter);
+    g.destroy();
+  }
+
+  private static acrobat(
+    scene: Phaser.Scene,
+    key: string,
+    size: number,
+    color: number,
+  ): void {
+    if (scene.textures.exists(key)) return;
+    const g = scene.make.graphics({ x: 0, y: 0 });
+    const r = size / 2;
+    g.fillStyle(color, 1);
+    g.fillCircle(r, r, r * 0.85);
+    g.lineStyle(3, COLORS.accent, 0.9);
+    g.strokeCircle(r, r, r * 0.85);
+    g.fillStyle(0xffe8a3, 0.9);
+    g.fillCircle(r - size * 0.15, r - size * 0.08, size * 0.07);
+    g.fillCircle(r + size * 0.15, r - size * 0.08, size * 0.07);
+    g.lineStyle(3, 0x8b5a2b, 1);
+    g.strokeCircle(r, r + size * 0.05, size * 0.35);
+    g.generateTexture(key, size, size);
+    g.destroy();
+  }
+
+  private static emblem(scene: Phaser.Scene, key: string, color: number): void {
+    if (scene.textures.exists(key)) return;
+    const size = 48;
+    const g = scene.make.graphics({ x: 0, y: 0 });
+    const cx = size / 2;
+    const cy = size / 2;
+    g.fillStyle(color, 1);
+    g.fillCircle(cx, cy, 18);
+    g.lineStyle(3, COLORS.accent, 1);
+    g.strokeCircle(cx, cy, 18);
+    g.fillStyle(0xffe8a3, 0.95);
+    g.fillCircle(cx, cy, 6);
+    g.generateTexture(key, size, size);
     g.destroy();
   }
 

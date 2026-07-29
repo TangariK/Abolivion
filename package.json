@@ -1,7 +1,7 @@
 {
   "name": "abolivion",
   "private": true,
-  "version": "0.1.4",
+  "version": "0.1.7",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "pack:gamejolt": "npm run build && node scripts/pack-gamejolt.mjs",
     "db:migrate": "node scripts/migrate-supabase.mjs",
-    "functions:deploy": "node scripts/deploy-attach-email.mjs"
+    "functions:deploy": "node scripts/deploy-attach-email.mjs",
+    "audio:fetch": "node scripts/fetch-freesound-audio.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.8",

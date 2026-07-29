@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config/GameConfig';
+import { AudioService } from '../services/AudioService';
 
 export class PauseScene extends Phaser.Scene {
   constructor() {
@@ -7,6 +8,9 @@ export class PauseScene extends Phaser.Scene {
   }
 
   create(): void {
+    AudioService.bind(this);
+    AudioService.setMusicDucked(true);
+
     this.add.rectangle(
       GAME_WIDTH / 2,
       GAME_HEIGHT / 2,
@@ -24,18 +28,30 @@ export class PauseScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.makeButton(GAME_WIDTH / 2, 330, 'CONTINUAR', () => this.resumeGame());
+    this.makeButton(GAME_WIDTH / 2, 330, 'CONTINUAR', () => {
+      AudioService.playSfx('sfx_ui_click');
+      this.resumeGame();
+    });
     this.makeButton(GAME_WIDTH / 2, 410, 'VOLTAR AO MENU', () => {
+      AudioService.playSfx('sfx_ui_back');
+      AudioService.setMusicDucked(false);
+      AudioService.stopAllMusic();
       this.scene.stop('GameScene');
       this.scene.start('MenuScene');
     });
 
-    const resumeOnEscape = () => this.resumeGame();
+    const resumeOnEscape = () => {
+      AudioService.playSfx('sfx_ui_click');
+      this.resumeGame();
+    };
     this.input.keyboard?.on('keydown-ESC', resumeOnEscape);
-    this.events.once('shutdown', () => this.input.keyboard?.off('keydown-ESC', resumeOnEscape));
+    this.events.once('shutdown', () => {
+      this.input.keyboard?.off('keydown-ESC', resumeOnEscape);
+    });
   }
 
   private resumeGame(): void {
+    AudioService.setMusicDucked(false);
     this.scene.stop();
     this.scene.resume('GameScene');
   }

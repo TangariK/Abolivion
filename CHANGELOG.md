@@ -15,7 +15,89 @@ Documentação detalhada de cada release: [`docs/versions/`](docs/versions/).
 
 ## [Unreleased]
 
-_Mudanças em desenvolvimento, ainda sem número de versão._
+### Adicionado
+
+- **Mural da Tribo** (menu, canto superior esquerdo): filtros por rodada / tempo / abates / nível
+- Preferência no perfil: Público / Anônimo (nome de árvore fixo) / Invisível
+- Inimigos **NV2** após rodada 40 ou ~10 min no Infinito (mesmos tipos, mais fortes)
+
+### Corrigido / Ajustado
+
+- Crash de áudio no level-up (`volume` nulo) e freeze no modo Livre (`WaveSystem`)
+- Contato/tiro: inimigo para antes de sumir no player; tiro sai um pouco à frente
+- XP orb para de seguir quando você sai do magnetismo
+- Kurupi: corrida forte na direção do player; salto do Acrobata com área centrada
+- HUD TRIGGERED + torretas do Boitatá no estilo “Invocados”
+- Balanceamento progressivo dos chefões e Triggered mais agressivo
+- Loja de metas recentralizada; texto da Sabedoria Ancestral sem “(máx. −50%)”
+
+---
+
+## [0.1.7] — 2026-07-28
+
+### Adicionado
+
+- Dificuldade: IA de cerco no Infinito/Rodadas; mais inimigos na tela; spawns próximos com o tempo
+- Inimigos: Apunhalador, 4 Camuflados, Entorpecedor e Bruto Entorpecedor
+- Status **Letargia** e **Tontura**; HUD de status com timer e barra
+- **Triggered Mode** em todos os chefões (metade da vida): grito, shake, poder extra
+- Boitatá: torretas destrutíveis (até 4) + contador; Envenenador: névoa/rastro e poções roxas
+- 5º chefão: **Acrobata da Clareira** (rodada 50) com música e saltos em área
+- Emblemas dropados por chefões + aba no Marã; XP de boss bem maior (orb grande)
+- Meta **Sabedoria Ancestral** (−5% XP/nível, máx. 50%); buffs Seiva/Ligadura; amuleto Véu de Cura
+
+### Detalhamento
+
+Ver [`docs/versions/0.1.7.md`](docs/versions/0.1.7.md).
+
+---
+
+## [0.1.6] — 2026-07-27
+
+### Adicionado
+
+- Sistema de som (menu ♪: volume / ligar-desligar música e efeitos); arquivos em `public/audio/`
+- SFX em perfil, Marã, dropdowns, pause, meta-shop, XP, buffs, amuletos; latido (Guará) e trovão ao despertar Tempestade de Tupã
+- Música por chefão (Kurupi, Boitatá, Lobo Rei, Envenenador) + duck da música no pause
+- Chefões: Lobo Rei (rodada 30), Envenenador Master (rodada 40)
+
+### Corrigido
+
+- Começar não trava após fechar dropdown de modo (blocker fullscreen)
+- Começar não fica morto após Modo Livre / overlays HTML (`input.enabled` reativado)
+- Overlap menu+jogo ao voltar pelo pause
+- Livre custom: barra de HP do chefão; BGM do boss mais forte selecionado
+- Lobo Rei mais agressivo (esquiva lateral sem se afastar); Envenenador com maior alcance de poção
+
+### Detalhamento
+
+Ver [`docs/versions/0.1.6.md`](docs/versions/0.1.6.md).
+
+---
+
+## [0.1.5] — 2026-07-26
+
+### Adicionado
+
+- Modo **Online** 2P: criar/buscar salas (públicas/privadas), link `?sala=`, lobby e countdown
+- Sync host-autoritativo (Supabase Realtime); convidados com nomes de árvore
+- Luz dourada na escolha de upgrade/amuleto no online; espectar / sair ao morrer
+- Amuletos: Presas de Jurupari (esquerda/direita), Meia-Lua de Jaci, Misericórdia de Anhangá,
+  Vigília de Iara (canal sobre aliado caído)
+- Inimigos: Envenenador e Lobos do Mal (3 variantes) com veneno/sangramento
+- HUD de status (Veneno / Sangramento) no canto superior
+- 5 conquistas exclusivas do online
+
+### Corrigido
+
+- Seletor de jogadores como dropdown; duas cabanas em 2P
+- Controles online (WASD+mouse no personagem local); tiro/mira após morte do aliado
+- Nome do host no convidado; proteção de escolha / tiro após upgrade
+- Game Over online: não oferece “Tentar de novo” sem sala (volta ao menu); evita lobby preso sem sessão
+
+### Detalhamento
+
+Ver [`docs/versions/0.1.5.md`](docs/versions/0.1.5.md).
 
 ---
 

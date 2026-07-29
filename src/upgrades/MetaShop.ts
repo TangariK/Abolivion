@@ -31,10 +31,23 @@ export const META_UPGRADE_DEFS: MetaUpgradeDef[] = [
     maxLevel: 8,
     bonusPerLevel: 20,
   },
+  {
+    id: 'xpEfficiency',
+    name: 'Sabedoria Ancestral',
+    description: '−5% XP necessário por nível',
+    maxLevel: 10,
+    bonusPerLevel: 5,
+  },
 ];
 
 export function metaCost(currentLevel: number): number {
   return META_COST_BASE * (currentLevel + 1);
+}
+
+/** Multiplicador de custo de XP (0.5 = metade). Meta e Meia-Lua combinam. */
+export function metaXpCostMultiplier(profile: Profile): number {
+  const lvl = profile.metaLevels.xpEfficiency ?? 0;
+  return Math.max(0.5, 1 - lvl * 0.05);
 }
 
 export function applyMetaToStats(base: PlayerStats, profile: Profile): PlayerStats {
@@ -49,6 +62,8 @@ export function applyMetaToStats(base: PlayerStats, profile: Profile): PlayerSta
     projectileSpeed: base.projectileSpeed,
     xpPickupRadius: base.xpPickupRadius,
     xpGainBonus: base.xpGainBonus,
+    poisonDamageMul: base.poisonDamageMul ?? 1,
+    bleedDamageMul: base.bleedDamageMul ?? 1,
   };
 }
 
@@ -57,7 +72,7 @@ export function tryBuyMeta(id: MetaUpgradeId): { ok: boolean; profile: Profile; 
   const def = META_UPGRADE_DEFS.find((d) => d.id === id);
   if (!def) return { ok: false, profile, message: 'Upgrade inválido' };
 
-  const level = profile.metaLevels[id];
+  const level = profile.metaLevels[id] ?? 0;
   if (level >= def.maxLevel) {
     return { ok: false, profile, message: 'Nível máximo' };
   }

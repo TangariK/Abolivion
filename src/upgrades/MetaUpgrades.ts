@@ -2,6 +2,7 @@ import type {
   AchievementId,
   AmuletId,
   BossId,
+  EmblemId,
   EnemyType,
   MetaUpgradeId,
   Profile,
@@ -27,6 +28,7 @@ function emptyAlmanac(): Profile['almanac'] {
     upgrades: [],
     bosses: [],
     achievements: [],
+    emblems: [],
   };
 }
 
@@ -54,10 +56,11 @@ function defaultProfile(): Profile {
       speed: 0,
       damage: 0,
       fireRate: 0,
+      xpEfficiency: 0,
     },
     almanac: emptyAlmanac(),
     bestScores: emptyBestScores(),
-    prefs: { showNameTag: false, acceptNewsletter: false },
+    prefs: { showNameTag: false, acceptNewsletter: false, musicVolume: 0.7, sfxVolume: 0.8, musicEnabled: true, sfxEnabled: true, muralVisibility: 'public' },
   };
 }
 
@@ -70,6 +73,7 @@ function normalizeProfile(parsed: Partial<Profile>): Profile {
       speed: parsed.metaLevels?.speed ?? 0,
       damage: parsed.metaLevels?.damage ?? 0,
       fireRate: parsed.metaLevels?.fireRate ?? 0,
+      xpEfficiency: parsed.metaLevels?.xpEfficiency ?? 0,
     },
     almanac: {
       enemies: Array.isArray(parsed.almanac?.enemies) ? parsed.almanac.enemies : [],
@@ -79,6 +83,7 @@ function normalizeProfile(parsed: Partial<Profile>): Profile {
       achievements: Array.isArray(parsed.almanac?.achievements)
         ? parsed.almanac.achievements
         : [],
+      emblems: Array.isArray(parsed.almanac?.emblems) ? parsed.almanac.emblems : [],
     },
     bestScores: {
       infiniteMs: Math.max(0, parsed.bestScores?.infiniteMs ?? 0),
@@ -95,6 +100,12 @@ function normalizeProfile(parsed: Partial<Profile>): Profile {
     prefs: {
       showNameTag: parsed.prefs?.showNameTag ?? false,
       acceptNewsletter: parsed.prefs?.acceptNewsletter ?? false,
+      musicVolume: parsed.prefs?.musicVolume ?? 0.7,
+      sfxVolume: parsed.prefs?.sfxVolume ?? 0.8,
+      musicEnabled: parsed.prefs?.musicEnabled ?? true,
+      sfxEnabled: parsed.prefs?.sfxEnabled ?? true,
+      muralVisibility: parsed.prefs?.muralVisibility ?? 'public',
+      muralAlias: parsed.prefs?.muralAlias,
     },
   };
 }
@@ -282,6 +293,10 @@ export class SaveManager {
     this.discover('bosses', id);
   }
 
+  static discoverEmblem(id: EmblemId): void {
+    this.discover('emblems', id);
+  }
+
   static unlockAchievement(id: AchievementId): boolean {
     const profile = this.load();
     if (profile.almanac.achievements.includes(id)) return false;
@@ -305,7 +320,7 @@ export class SaveManager {
 
   private static discover(
     category: keyof Profile['almanac'],
-    id: EnemyType | AmuletId | RunUpgradeId | BossId | AchievementId,
+    id: EnemyType | AmuletId | RunUpgradeId | BossId | AchievementId | EmblemId,
   ): void {
     // Modo Livre é sandbox: nada novo entra no Marã
     if (GameSettingsStore.getMode() === 'free') return;

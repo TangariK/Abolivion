@@ -4,7 +4,7 @@ Roguelite top-down (estilo *Vampire Survivors*), feito com **TypeScript**, **Pha
 
 **Jogue no navegador:** [Game Jolt — Abolivion](https://gamejolt.com/games/abolivion/1086828)
 
-**Versão atual:** `0.1.4` — ver [CHANGELOG](CHANGELOG.md) e [docs/versions/0.1.4.md](docs/versions/0.1.4.md)
+**Versão atual:** `0.1.7` — ver [CHANGELOG](CHANGELOG.md) · [notas 0.1.7](docs/versions/0.1.7.md)
 
 ---
 
@@ -26,13 +26,14 @@ Você controla um pequeno índio em uma tribo abandonada. Toda noite, centenas d
 
 ### Loop
 
-1. Escolha o **modo** (Infinito, Rodadas ou Livre; História em breve).
+1. Escolha o **modo** (Infinito, Rodadas, Livre ou Online; História em breve).
 2. Ande pelo mapa e elimine inimigos (eles te perseguem).
 3. Colete orbs de **XP** → suba de nível → escolha **1 de 3 upgrades**.
 4. A cada 5 níveis, escolha também um **Amuleto** (com raridade em luas).
 5. Ao morrer, ganhe **moedas** e compre **melhorias permanentes** no menu (exceto no Modo Livre).
 6. Consulte descobertas e conquistas no **Marã**.
-7. Tente de novo. Opcional: crie uma **conta** no perfil para não perder o progresso.
+7. Tente de novo. Opcional: crie uma **conta** no perfil para não perder o progresso. No **Online**,
+   crie ou entre em uma sala (pública/privada) para jogar com outra pessoa.
 
 ### Inimigos (MVP)
 

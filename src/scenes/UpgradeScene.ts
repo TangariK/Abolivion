@@ -2,15 +2,19 @@ import Phaser from 'phaser';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config/GameConfig';
 import type { AmuletId } from '../data/types';
 import type { Player } from '../entities/Player';
-import { moonLabel, pickAmulets } from '../upgrades/Amulets';
+import { moonLabel, pickAmulets, type PickAmuletContext } from '../upgrades/Amulets';
 import { SaveManager } from '../upgrades/MetaUpgrades';
 import { pickRandomUpgrades } from '../upgrades/RunUpgrades';
+import { AudioService } from '../services/AudioService';
 
 interface UpgradeData {
   player: Player;
   players: Player[];
   mode: 'upgrade' | 'amulet';
   ownedAmulets: AmuletId[];
+  pickCtx?: PickAmuletContext;
+  /** Se true, GameScene foi pausada e precisa de resume ao fechar. */
+  resumeGame?: boolean;
   onAmuletSelected: (id: AmuletId) => void;
   onComplete: () => void;
   onAchievement?: (id: 'xp_scholar') => void;
@@ -21,9 +25,12 @@ export class UpgradeScene extends Phaser.Scene {
   private players: Player[] = [];
   private mode: 'upgrade' | 'amulet' = 'upgrade';
   private ownedAmulets: AmuletId[] = [];
+  private pickCtx: PickAmuletContext = { coop: false, allyDead: false, mercyUses: 0 };
+  private resumeGame = true;
   private onAmuletSelected!: (id: AmuletId) => void;
   private onComplete!: () => void;
   private onAchievement?: (id: 'xp_scholar') => void;
+  private finished = false;
 
   constructor() {
     super('UpgradeScene');
@@ -34,12 +41,18 @@ export class UpgradeScene extends Phaser.Scene {
     this.players = data.players?.length ? data.players : [data.player];
     this.mode = data.mode;
     this.ownedAmulets = data.ownedAmulets ?? [];
+    this.pickCtx = data.pickCtx ?? { coop: false, allyDead: false, mercyUses: 0 };
+    this.resumeGame = data.resumeGame !== false;
     this.onAmuletSelected = data.onAmuletSelected;
     this.onComplete = data.onComplete;
     this.onAchievement = data.onAchievement;
+    this.finished = false;
   }
 
   create(): void {
+    // Não re-bind: a GameScene/Menu já segura o SoundManager (evita crash de volume nulo).
+    AudioService.playSfx(this.mode === 'amulet' ? 'sfx_amulet_appear' : 'sfx_buff_appear');
+
     this.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.65)
       .setScrollFactor(0);
@@ -110,11 +123,10 @@ export class UpgradeScene extends Phaser.Scene {
       card.on('pointerover', () => card.setFillStyle(0x243528, 0.98));
       card.on('pointerout', () => card.setFillStyle(COLORS.cardBg, 0.98));
       card.on('pointerdown', () => {
+        AudioService.playSfx('sfx_buff_select');
         for (const p of this.players) {
-          if (!p.isDead()) p.applyUpgrade(upgrade.apply);
-          else p.applyUpgrade(upgrade.apply); // keep dead players' max stats updated too
+          p.applyUpgrade(upgrade.apply);
         }
-        // Ensure shared baseline from P1
         const base = this.player.stats;
         for (const p of this.players) {
           if (p !== this.player) p.syncStatsFrom(base);
@@ -127,7 +139,7 @@ export class UpgradeScene extends Phaser.Scene {
   }
 
   private createAmuletCards(): void {
-    const amulets = pickAmulets(this.ownedAmulets, 3);
+    const amulets = pickAmulets(this.ownedAmulets, 3, this.pickCtx);
     if (amulets.length === 0) {
       this.add
         .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'Todos os amuletos já foram despertados.', {
@@ -196,6 +208,7 @@ export class UpgradeScene extends Phaser.Scene {
       card.on('pointerover', () => card.setFillStyle(0x352e1a, 0.99));
       card.on('pointerout', () => card.setFillStyle(0x231f13, 0.99));
       card.on('pointerdown', () => {
+        AudioService.playSfx('sfx_amulet_select');
         SaveManager.discoverAmulet(amulet.id);
         this.onAmuletSelected(amulet.id);
         this.finish();
@@ -204,8 +217,14 @@ export class UpgradeScene extends Phaser.Scene {
   }
 
   private finish(): void {
+    if (this.finished) return;
+    this.finished = true;
     this.onComplete();
+    // Não chamar processPendingLevelUps aqui — o GameScene agenda no próximo tick
+    // depois deste stop (senão o stop mata o próximo UpgradeScene e trava choiceProtected).
     this.scene.stop();
-    this.scene.resume('GameScene');
+    if (this.resumeGame) {
+      this.scene.resume('GameScene');
+    }
   }
 }

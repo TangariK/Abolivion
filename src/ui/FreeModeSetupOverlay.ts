@@ -9,6 +9,7 @@ import type {
   RunUpgradeId,
 } from '../data/types';
 import { AdminService } from '../services/AdminService';
+import { AudioService } from '../services/AudioService';
 import { AMULETS, moonLabel } from '../upgrades/Amulets';
 import { META_UPGRADE_DEFS } from '../upgrades/MetaShop';
 import { RUN_UPGRADES } from '../upgrades/RunUpgrades';
@@ -24,6 +25,7 @@ const MUTED = '#a8c0a8';
  */
 export class FreeModeSetupOverlay {
   private root?: HTMLDivElement;
+  private closeTimer?: number;
 
   open(profile: Profile, onStart: (config: FreeModeConfig) => void, onCancel: () => void): void {
     this.close();
@@ -245,6 +247,7 @@ export class FreeModeSetupOverlay {
 
     const startBtn = this.button('INICIAR', ACCENT, '#0d1a12');
     startBtn.onclick = () => {
+      AudioService.playSfx('sfx_ui_click');
       const config = this.buildConfig({
         dev,
         maxWave,
@@ -272,6 +275,7 @@ export class FreeModeSetupOverlay {
 
     const cancelBtn = this.button('Cancelar', 'transparent', MUTED, true);
     cancelBtn.onclick = () => {
+      AudioService.playSfx('sfx_ui_back');
       const cancel = onCancel;
       this.closeDelayed(() => cancel());
     };
@@ -284,14 +288,22 @@ export class FreeModeSetupOverlay {
   }
 
   close(): void {
+    if (this.closeTimer !== undefined) {
+      window.clearTimeout(this.closeTimer);
+      this.closeTimer = undefined;
+    }
     this.root?.remove();
     this.root = undefined;
   }
 
   private closeDelayed(after: () => void): void {
+    if (this.closeTimer !== undefined) {
+      window.clearTimeout(this.closeTimer);
+    }
     const root = this.root;
     this.root = undefined;
-    window.setTimeout(() => {
+    this.closeTimer = window.setTimeout(() => {
+      this.closeTimer = undefined;
       root?.remove();
       after();
     }, 80);
@@ -336,6 +348,7 @@ export class FreeModeSetupOverlay {
       speed: 0,
       damage: 0,
       fireRate: 0,
+      xpEfficiency: 0,
     };
     for (const [id, input] of args.metaInputs) {
       metaLevels[id] = clampInt(input, 0, 10);

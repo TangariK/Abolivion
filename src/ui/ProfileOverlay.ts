@@ -1,5 +1,6 @@
 import { AdminService } from '../services/AdminService';
 import { AuthService } from '../services/AuthService';
+import { AudioService } from '../services/AudioService';
 import { isSupabaseConfigured } from '../services/supabaseClient';
 import { hasProfileProgress, SaveManager } from '../upgrades/MetaUpgrades';
 import { ptAuthError } from '../utils/authErrors';
@@ -636,6 +637,68 @@ export class ProfileOverlay {
     });
     optionsSection.append(tagCheck.wrap);
 
+    const muralBlock = document.createElement('div');
+    Object.assign(muralBlock.style, { marginTop: '12px' } as CSSStyleDeclaration);
+    const muralLabel = document.createElement('div');
+    muralLabel.textContent = 'Participação no Mural da Tribo';
+    Object.assign(muralLabel.style, {
+      fontSize: '13px',
+      color: TEXT,
+      marginBottom: '8px',
+    } as CSSStyleDeclaration);
+    const muralHint = document.createElement('div');
+    muralHint.textContent =
+      'Público mostra seu nome. Anônimo usa um nome de árvore fixo. Invisível some do mural.';
+    Object.assign(muralHint.style, {
+      fontSize: '12px',
+      color: MUTED,
+      marginBottom: '8px',
+      lineHeight: '1.35',
+    } as CSSStyleDeclaration);
+    const switchRow = document.createElement('div');
+    Object.assign(switchRow.style, {
+      display: 'flex',
+      gap: '6px',
+      flexWrap: 'wrap',
+    } as CSSStyleDeclaration);
+    const muralModes: Array<{ id: 'public' | 'anonymous' | 'invisible'; label: string }> = [
+      { id: 'public', label: 'Público' },
+      { id: 'anonymous', label: 'Anônimo' },
+      { id: 'invisible', label: 'Invisível' },
+    ];
+    let muralVis = profile.prefs?.muralVisibility ?? 'public';
+    const paintMural = () => {
+      switchRow.replaceChildren();
+      for (const m of muralModes) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = m.label;
+        const on = muralVis === m.id;
+        Object.assign(btn.style, {
+          flex: '1 1 auto',
+          padding: '8px 10px',
+          borderRadius: '6px',
+          border: `1px solid ${on ? ACCENT : '#3a4a3a'}`,
+          background: on ? 'rgba(196,163,90,0.22)' : 'transparent',
+          color: on ? ACCENT : MUTED,
+          cursor: 'pointer',
+          fontSize: '13px',
+          fontFamily: 'Georgia, Times New Roman, serif',
+        } as CSSStyleDeclaration);
+        btn.onclick = () => {
+          muralVis = m.id;
+          paintMural();
+          void AuthService.setMuralVisibility(m.id)
+            .then(() => feedback(`Mural: ${m.label}.`))
+            .catch(fail);
+        };
+        switchRow.append(btn);
+      }
+    };
+    paintMural();
+    muralBlock.append(muralLabel, muralHint, switchRow);
+    optionsSection.append(muralBlock);
+
     if (realEmail || pendingEmail) {
       const newsCheck = this.checkbox('Receber novidades do jogo por e-mail');
       newsCheck.input.checked = profile.prefs?.acceptNewsletter ?? AuthService.acceptsNewsletter();
@@ -1120,6 +1183,7 @@ export class ProfileOverlay {
       cursor: 'pointer',
     } as CSSStyleDeclaration);
     this.setTabActive(btn, active);
+    btn.addEventListener('click', () => AudioService.playSfx('sfx_ui_open'));
     return btn;
   }
 
@@ -1145,6 +1209,7 @@ export class ProfileOverlay {
       cursor: 'pointer',
       whiteSpace: 'nowrap',
     } as CSSStyleDeclaration);
+    btn.addEventListener('click', () => AudioService.playSfx('sfx_ui_click'));
     return btn;
   }
 
@@ -1169,6 +1234,11 @@ export class ProfileOverlay {
       fontSize: '15px',
       cursor: 'pointer',
     } as CSSStyleDeclaration);
+    const isBack =
+      /^(Fechar|Cancelar|Voltar)\b/i.test(label) || /sair da conta/i.test(label);
+    btn.addEventListener('click', () => {
+      AudioService.playSfx(isBack ? 'sfx_ui_back' : 'sfx_ui_click');
+    });
     return btn;
   }
 }
