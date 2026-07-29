@@ -243,15 +243,16 @@ export class SaveManager {
   }): void {
     const profile = this.load();
     const best = profile.bestScores ?? emptyBestScores();
+    const survivalMs = Math.round(Math.max(0, stats.survivalMs));
     if (stats.mode === 'infinite') {
-      best.infiniteMs = Math.max(best.infiniteMs, stats.survivalMs);
+      best.infiniteMs = Math.max(Math.round(best.infiniteMs), survivalMs);
     }
     if (stats.mode === 'waves' && stats.waveReached !== undefined) {
       best.wavesReached = Math.max(best.wavesReached, stats.waveReached);
     }
     best.kills = Math.max(best.kills, stats.kills);
     best.bestLevel = Math.max(best.bestLevel ?? 1, stats.level);
-    best.totalPlayMs = (best.totalPlayMs ?? 0) + Math.max(0, stats.survivalMs);
+    best.totalPlayMs = Math.round((best.totalPlayMs ?? 0) + survivalMs);
     best.totalCoinsEarned = (best.totalCoinsEarned ?? 0) + Math.max(0, stats.coinsEarned ?? 0);
     if (stats.killStreak !== undefined) {
       best.bestKillStreak = Math.max(best.bestKillStreak ?? 0, stats.killStreak);

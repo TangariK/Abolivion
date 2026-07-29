@@ -68,7 +68,9 @@ export async function fetchMuralEntries(sort: MuralSort): Promise<MuralEntry[]> 
         p_sort: sort,
         p_limit: 30,
       });
-      if (!error && Array.isArray(data)) {
+      if (error) {
+        console.warn('[Abolivion] mural RPC failed', error.message);
+      } else if (Array.isArray(data)) {
         for (const row of data as Array<{
           display_name: string;
           waves_reached: number;
@@ -90,14 +92,12 @@ export async function fetchMuralEntries(sort: MuralSort): Promise<MuralEntry[]> 
     }
   }
 
-  if (local) {
-    const exists = merged.some(
-      (e) => e.displayName.toLowerCase() === local.displayName.toLowerCase(),
-    );
-    if (!exists) merged.push(local);
+  // Só injeta o save local se a nuvem não trouxe ninguém (offline / RPC quebrada).
+  // Se a nuvem já listou jogadores, não duplica “você” por cima do ranking.
+  if (local && merged.length === 0) {
+    merged.push(local);
   }
 
-  if (merged.length === 0 && local) return [local];
   return sortEntries(merged, sort).slice(0, 25);
 }
 

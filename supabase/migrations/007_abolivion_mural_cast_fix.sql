@@ -1,17 +1,6 @@
--- 006: Mural da Tribo — visibilidade + leitura pública segura dos recordes
--- Safe on shared project: only touches abolivion_* objects.
+-- 007: Mural — best_scores guarda ms com casas decimais (Phaser delta);
+-- cast direto para bigint falhava e a RPC retornava erro (mural só com fallback local).
 
-alter table public.abolivion_profiles
-  add column if not exists mural_visibility text not null default 'public',
-  add column if not exists mural_alias text;
-
-alter table public.abolivion_profiles
-  drop constraint if exists abolivion_profiles_mural_visibility_check;
-alter table public.abolivion_profiles
-  add constraint abolivion_profiles_mural_visibility_check
-  check (mural_visibility in ('public', 'anonymous', 'invisible'));
-
--- RPC: lista recordes sem expor perfis invisíveis / sem vazar dados sensíveis
 create or replace function public.abolivion_mural_entries(
   p_sort text default 'waves',
   p_limit integer default 25
@@ -39,7 +28,6 @@ begin
       when p.mural_visibility = 'anonymous' then coalesce(nullif(p.mural_alias, ''), 'arvore_00')
       else coalesce(nullif(p.username, ''), nullif(p.display_name, ''), 'Caçador')
     end as display_name,
-    -- ms/contagens podem vir com casas decimais do Phaser — round antes de int/bigint
     coalesce(round((p.best_scores->>'wavesReached')::numeric), 0)::integer as waves_reached,
     coalesce(round((p.best_scores->>'infiniteMs')::numeric), 0)::bigint as infinite_ms,
     coalesce(round((p.best_scores->>'kills')::numeric), 0)::integer as kills,
