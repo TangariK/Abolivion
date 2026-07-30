@@ -13,7 +13,7 @@ import { GameSettingsStore } from '../data/GameModeStore';
 
 /** Slot do convidado (e legado pré-0.1.4.1, chave compartilhada). */
 const GUEST_KEY = 'abolivion_profile_v1';
-const PROFILE_VERSION = 4;
+const PROFILE_VERSION = 5;
 
 export type SaveOptions = { skipCloud?: boolean };
 
@@ -51,6 +51,8 @@ function defaultProfile(): Profile {
   return {
     version: PROFILE_VERSION,
     currency: 0,
+    resin: 0,
+    updatedAt: new Date().toISOString(),
     metaLevels: {
       maxHp: 0,
       speed: 0,
@@ -60,7 +62,15 @@ function defaultProfile(): Profile {
     },
     almanac: emptyAlmanac(),
     bestScores: emptyBestScores(),
-    prefs: { showNameTag: false, acceptNewsletter: false, musicVolume: 0.7, sfxVolume: 0.8, musicEnabled: true, sfxEnabled: true, muralVisibility: 'public' },
+    prefs: {
+      showNameTag: false,
+      acceptNewsletter: false,
+      musicVolume: 0.7,
+      sfxVolume: 0.8,
+      musicEnabled: true,
+      sfxEnabled: true,
+      muralVisibility: 'public',
+    },
   };
 }
 
@@ -68,6 +78,8 @@ function normalizeProfile(parsed: Partial<Profile>): Profile {
   return {
     version: PROFILE_VERSION,
     currency: Math.max(0, parsed.currency ?? 0),
+    resin: Math.max(0, parsed.resin ?? 0),
+    updatedAt: parsed.updatedAt,
     metaLevels: {
       maxHp: parsed.metaLevels?.maxHp ?? 0,
       speed: parsed.metaLevels?.speed ?? 0,
@@ -106,6 +118,7 @@ function normalizeProfile(parsed: Partial<Profile>): Profile {
       sfxEnabled: parsed.prefs?.sfxEnabled ?? true,
       muralVisibility: parsed.prefs?.muralVisibility ?? 'public',
       muralAlias: parsed.prefs?.muralAlias,
+      emblemEnabled: parsed.prefs?.emblemEnabled,
     },
   };
 }
@@ -134,12 +147,14 @@ export function hasProfileProgress(profile: Profile): boolean {
   const best = profile.bestScores;
   return (
     profile.currency > 0
+    || (profile.resin ?? 0) > 0
     || Object.values(profile.metaLevels).some((v) => v > 0)
     || profile.almanac.enemies.length > 0
     || profile.almanac.amulets.length > 0
     || profile.almanac.upgrades.length > 0
     || profile.almanac.bosses.length > 0
     || profile.almanac.achievements.length > 0
+    || (profile.almanac.emblems?.length ?? 0) > 0
     || (best?.kills ?? 0) > 0
     || (best?.infiniteMs ?? 0) > 0
     || (best?.wavesReached ?? 0) > 0
@@ -161,16 +176,20 @@ export function profileProgressScore(profile: Profile): number {
     + (best.bestKillStreak ?? 0) * 10
     + (best.totalCoinsEarned ?? 0)
     + profile.currency * 5
+    + (profile.resin ?? 0) * 8
     + metaSum * 80
     + profile.almanac.achievements.length * 120
     + profile.almanac.bosses.length * 400
     + profile.almanac.enemies.length * 30
+    + (profile.almanac.emblems?.length ?? 0) * 200
   );
 }
 
 export class SaveManager {
   /** null = convidado (GUEST_KEY). */
   private static activeUserId: string | null = null;
+  private static cache: Profile | null = null;
+  private static cacheKey: string | null = null;
 
   static getActiveUserId(): string | null {
     return this.activeUserId;
@@ -180,14 +199,21 @@ export class SaveManager {
     return this.activeUserId ? userKey(this.activeUserId) : GUEST_KEY;
   }
 
+  private static invalidateCache(): void {
+    this.cache = null;
+    this.cacheKey = null;
+  }
+
   /** Troca o slot ativo para a conta (não apaga o save de convidado). */
   static bindUser(userId: string): void {
     this.activeUserId = userId;
+    this.invalidateCache();
   }
 
   /** Volta ao slot de convidado. */
   static bindGuest(): void {
     this.activeUserId = null;
+    this.invalidateCache();
   }
 
   static loadGuest(): Profile {
@@ -199,11 +225,20 @@ export class SaveManager {
   }
 
   static load(): Profile {
-    return readKey(this.activeKey());
+    const key = this.activeKey();
+    if (this.cache && this.cacheKey === key) return this.cache;
+    const profile = readKey(key);
+    this.cache = profile;
+    this.cacheKey = key;
+    return profile;
   }
 
   static save(profile: Profile, options: SaveOptions = {}): void {
+    profile.updatedAt = new Date().toISOString();
+    profile.version = PROFILE_VERSION;
     writeKey(this.activeKey(), profile);
+    this.cache = profile;
+    this.cacheKey = this.activeKey();
     if (!options.skipCloud) {
       void import('../services/AuthService').then(({ AuthService }) => {
         if (!AuthService.isLoggedIn()) return;
@@ -219,6 +254,13 @@ export class SaveManager {
     profile.currency += Math.max(0, amount);
     this.save(profile);
     if (profile.currency >= 200) this.unlockAchievement('deep_pockets');
+    return profile;
+  }
+
+  static addResin(amount: number): Profile {
+    const profile = this.load();
+    profile.resin = (profile.resin ?? 0) + Math.max(0, amount);
+    this.save(profile);
     return profile;
   }
 

@@ -27,7 +27,11 @@ export interface CreatedRoom {
   gameMode: RoomGameMode;
   displayName: string;
   shareUrl: string;
+  /** Presente quando o host é convidado (sem conta). */
+  hostGuestId?: string;
 }
+
+const GUEST_HOST_KEY = 'abolivion_room_host_guest';
 
 function requireClient() {
   const supabase = getSupabase();
@@ -35,6 +39,62 @@ function requireClient() {
     throw new Error('Supabase não configurado.');
   }
   return supabase;
+}
+
+function saveGuestHostBinding(code: string, guestId: string): void {
+  try {
+    sessionStorage.setItem(GUEST_HOST_KEY, JSON.stringify({ code: code.toUpperCase(), guestId }));
+  } catch {
+    // ignore
+  }
+}
+
+function loadGuestHostId(code: string): string | null {
+  try {
+    const raw = sessionStorage.getItem(GUEST_HOST_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { code?: string; guestId?: string };
+    if (parsed.code?.toUpperCase() !== code.trim().toUpperCase()) return null;
+    return parsed.guestId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function hostMutate(
+  code: string,
+  action: 'waiting' | 'playing' | 'closed' | 'delete',
+): Promise<void> {
+  const supabase = requireClient();
+  const roomCode = code.trim().toUpperCase();
+  const guestId = AuthService.isLoggedIn() ? null : loadGuestHostId(roomCode);
+
+  const { data, error } = await supabase.rpc('abolivion_room_host_mutate', {
+    p_code: roomCode,
+    p_guest_id: guestId,
+    p_action: action,
+  });
+  if (error) throw error;
+  if (!data) {
+    // Fallback: conta logada ainda pode tentar update direto (RLS próprio)
+    if (AuthService.isLoggedIn() && action !== 'delete') {
+      const { error: upErr } = await supabase
+        .from('abolivion_rooms')
+        .update({ status: action })
+        .eq('code', roomCode);
+      if (upErr) throw upErr;
+      return;
+    }
+    if (AuthService.isLoggedIn() && action === 'delete') {
+      const { error: delErr } = await supabase
+        .from('abolivion_rooms')
+        .delete()
+        .eq('code', roomCode);
+      if (delErr) throw delErr;
+      return;
+    }
+    throw new Error('Sem permissão para alterar esta sala.');
+  }
 }
 
 export const RoomService = {
@@ -55,12 +115,14 @@ export const RoomService = {
         ? await sha256Hex(options.password)
         : null;
 
+    const hostGuestId = AuthService.isLoggedIn() ? null : crypto.randomUUID();
+
     let code = generateRoomCode();
     for (let attempt = 0; attempt < 8; attempt++) {
       const { error } = await supabase.from('abolivion_rooms').insert({
         code,
         host_uid: AuthService.getUser()?.id ?? null,
-        host_guest_id: AuthService.isLoggedIn() ? null : crypto.randomUUID(),
+        host_guest_id: hostGuestId,
         host_display_name: displayName,
         is_public: options.isPublic,
         password_hash: passwordHash,
@@ -68,12 +130,14 @@ export const RoomService = {
         status: 'waiting',
       });
       if (!error) {
+        if (hostGuestId) saveGuestHostBinding(code, hostGuestId);
         return {
           code,
           isPublic: options.isPublic,
           gameMode: options.gameMode,
           displayName,
           shareUrl: `${window.location.origin}/?sala=${code}`,
+          hostGuestId: hostGuestId ?? undefined,
         };
       }
       if (!/duplicate|unique/i.test(error.message)) throw error;
@@ -98,22 +162,18 @@ export const RoomService = {
   },
 
   async setStatus(code: string, status: 'waiting' | 'playing' | 'closed'): Promise<void> {
-    const supabase = requireClient();
-    const { error } = await supabase
-      .from('abolivion_rooms')
-      .update({ status })
-      .eq('code', code.trim().toUpperCase());
-    if (error) throw error;
+    await hostMutate(code, status);
   },
 
   async close(code: string): Promise<void> {
-    const supabase = requireClient();
-    const { error } = await supabase
-      .from('abolivion_rooms')
-      .delete()
-      .eq('code', code.trim().toUpperCase());
-    if (error) {
-      await this.setStatus(code, 'closed');
+    try {
+      await hostMutate(code, 'delete');
+    } catch {
+      try {
+        await hostMutate(code, 'closed');
+      } catch {
+        // ignore
+      }
     }
   },
 

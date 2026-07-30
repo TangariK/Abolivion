@@ -17,21 +17,28 @@ export type EnemyType =
   | 'camo_poison'
   | 'camo_toxic_blade'
   | 'lethargy_spitter'
-  | 'lethargy_brute';
+  | 'lethargy_brute'
+  | 'escudeiro'
+  | 'knight_sword'
+  | 'knight_crossbow'
+  | 'knight_vial'
+  | 'knight_healer';
 
 export type BossId =
   | 'kurupi_brood'
   | 'boitata_gaze'
   | 'wolf_king'
   | 'poisoner_master'
-  | 'acrobat_leap';
+  | 'acrobat_leap'
+  | 'shield_master';
 
 export type EmblemId =
   | 'emblem_kurupi'
   | 'emblem_boitata'
   | 'emblem_wolf'
   | 'emblem_poison'
-  | 'emblem_acrobat';
+  | 'emblem_acrobat'
+  | 'emblem_shield';
 
 export type RunUpgradeId =
   | 'hp_up'
@@ -43,7 +50,11 @@ export type RunUpgradeId =
   | 'xp_magnet'
   | 'xp_gain'
   | 'poison_ward'
-  | 'bleed_ward';
+  | 'bleed_ward'
+  | 'second_chant'
+  | 'stamina_max'
+  | 'stamina_regen'
+  | 'sprint_speed';
 
 export type AmuletId =
   | 'araci_eyes'
@@ -120,6 +131,12 @@ export interface PlayerStats {
   poisonDamageMul: number;
   /** Multiplicador do dano de DoT de sangramento. */
   bleedDamageMul: number;
+  /** Stamina (Emblema da Matilha). */
+  staminaMax?: number;
+  stamina?: number;
+  staminaRegen?: number;
+  /** Bônus multiplicativo na corrida (1.35 base + buffs). */
+  sprintMul?: number;
 }
 
 export interface EnemyDef {
@@ -134,6 +151,10 @@ export interface EnemyDef {
   textureKey: string;
   description: string;
   armor?: number;
+  /** Camadas extras de armadura (Escudeiro). */
+  armorLayers?: number;
+  /** HP da armadura em camadas seguintes. */
+  armorPerLayer?: number;
   appliesPoison?: boolean;
   bleedChance?: number;
   /** Sempre tenta costas / contorna quando olhado. */
@@ -144,6 +165,8 @@ export interface EnemyDef {
   appliesLethargy?: boolean;
   /** Letargia + DoT leve (veneno roxo com dano). */
   lethargyDamaging?: boolean;
+  /** Amarrado ao Mestre do Escudo. */
+  knightRole?: 'sword' | 'crossbow' | 'vial' | 'healer';
 }
 
 export interface BossTriggeredMode {
@@ -163,6 +186,7 @@ export interface BossDef {
   xp: number;
   radius: number;
   wave: number;
+  armor?: number;
   triggeredMode: BossTriggeredMode;
 }
 
@@ -235,6 +259,10 @@ export interface MetaUpgradeDef {
 export interface Profile {
   version: number;
   currency: number;
+  /** Resina — Loja da Tribo (0.1.8+). */
+  resin: number;
+  /** Timestamp ISO do último save local (merge LWW com nuvem). */
+  updatedAt?: string;
   metaLevels: Record<MetaUpgradeId, number>;
   almanac: {
     enemies: EnemyType[];
@@ -267,6 +295,8 @@ export interface Profile {
     muralVisibility?: 'public' | 'anonymous' | 'invisible';
     /** Alias fixo quando anônimo (árvore_NN) */
     muralAlias?: string;
+    /** Emblemas ativos (default true se owned). */
+    emblemEnabled?: Partial<Record<EmblemId, boolean>>;
   };
 }
 

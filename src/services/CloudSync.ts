@@ -18,6 +18,7 @@ export interface CloudProfileRow {
   mural_visibility: string | null;
   mural_alias: string | null;
   currency: number;
+  resin?: number;
   meta_levels: Profile['metaLevels'];
   almanac: Profile['almanac'];
   best_scores: NonNullable<Profile['bestScores']>;
@@ -41,22 +42,40 @@ function emptyBestScores(): NonNullable<Profile['bestScores']> {
   };
 }
 
-export function mergeProfiles(local: Profile, cloud: Partial<Profile>): Profile {
+function cloudWinsEconomy(localUpdatedAt: string | undefined, cloudUpdatedAt: string): boolean {
+  if (!localUpdatedAt) return true;
+  const localTs = Date.parse(localUpdatedAt);
+  const cloudTs = Date.parse(cloudUpdatedAt);
+  if (Number.isNaN(localTs)) return true;
+  if (Number.isNaN(cloudTs)) return false;
+  return cloudTs >= localTs;
+}
+
+export function mergeProfiles(
+  local: Profile,
+  cloud: Partial<Profile>,
+  cloudUpdatedAt?: string,
+): Profile {
   const localBest = local.bestScores ?? emptyBestScores();
   const cloudBest = cloud.bestScores ?? emptyBestScores();
+  const useCloudEcon = cloudWinsEconomy(local.updatedAt, cloudUpdatedAt ?? local.updatedAt ?? '');
+
   return {
     version: Math.max(local.version, cloud.version ?? local.version),
-    currency: Math.max(local.currency, cloud.currency ?? 0),
-    metaLevels: {
-      maxHp: Math.max(local.metaLevels.maxHp, cloud.metaLevels?.maxHp ?? 0),
-      speed: Math.max(local.metaLevels.speed, cloud.metaLevels?.speed ?? 0),
-      damage: Math.max(local.metaLevels.damage, cloud.metaLevels?.damage ?? 0),
-      fireRate: Math.max(local.metaLevels.fireRate, cloud.metaLevels?.fireRate ?? 0),
-      xpEfficiency: Math.max(
-        local.metaLevels.xpEfficiency ?? 0,
-        cloud.metaLevels?.xpEfficiency ?? 0,
-      ),
-    },
+    currency: useCloudEcon ? (cloud.currency ?? 0) : local.currency,
+    resin: useCloudEcon ? (cloud.resin ?? 0) : (local.resin ?? 0),
+    updatedAt: useCloudEcon
+      ? (cloudUpdatedAt ?? cloud.updatedAt ?? local.updatedAt)
+      : local.updatedAt,
+    metaLevels: useCloudEcon
+      ? {
+          maxHp: cloud.metaLevels?.maxHp ?? 0,
+          speed: cloud.metaLevels?.speed ?? 0,
+          damage: cloud.metaLevels?.damage ?? 0,
+          fireRate: cloud.metaLevels?.fireRate ?? 0,
+          xpEfficiency: cloud.metaLevels?.xpEfficiency ?? 0,
+        }
+      : { ...local.metaLevels },
     almanac: {
       enemies: union(local.almanac.enemies, cloud.almanac?.enemies ?? []),
       amulets: union(local.almanac.amulets, cloud.almanac?.amulets ?? []),
@@ -77,7 +96,6 @@ export function mergeProfiles(local: Profile, cloud: Partial<Profile>): Profile 
       lowestHpSurvive: mergeLowestHp(localBest.lowestHpSurvive, cloudBest.lowestHpSurvive),
       bestAccuracy: Math.max(localBest.bestAccuracy ?? 0, cloudBest.bestAccuracy ?? 0),
     },
-    // Preferências da conta: nuvem manda (áudio fica só no aparelho)
     prefs: {
       showNameTag: cloud.prefs?.showNameTag ?? local.prefs?.showNameTag ?? false,
       acceptNewsletter: cloud.prefs?.acceptNewsletter ?? local.prefs?.acceptNewsletter ?? false,
@@ -88,6 +106,10 @@ export function mergeProfiles(local: Profile, cloud: Partial<Profile>): Profile 
       muralVisibility:
         cloud.prefs?.muralVisibility ?? local.prefs?.muralVisibility ?? 'public',
       muralAlias: cloud.prefs?.muralAlias ?? local.prefs?.muralAlias,
+      emblemEnabled: {
+        ...(local.prefs?.emblemEnabled ?? {}),
+        ...(cloud.prefs?.emblemEnabled ?? {}),
+      },
     },
   };
 }
@@ -106,8 +128,10 @@ function union<T extends string>(a: T[], b: T[]): T[] {
 
 export function rowToProfile(row: CloudProfileRow): Profile {
   return {
-    version: row.profile_version || 4,
+    version: row.profile_version || 5,
     currency: row.currency ?? 0,
+    resin: row.resin ?? 0,
+    updatedAt: row.updated_at,
     metaLevels: {
       maxHp: row.meta_levels?.maxHp ?? 0,
       speed: row.meta_levels?.speed ?? 0,
@@ -179,7 +203,7 @@ export async function pullAndMergeCloudProfile(userId: string): Promise<Profile>
 
   const accountLocal = SaveManager.loadUser(userId);
   const guest = SaveManager.loadGuest();
-  const legacyShared = guest; // mesma chave v1 pré-separação
+  const legacyShared = guest;
 
   if (!data) {
     const seed = hasProfileProgress(accountLocal)
@@ -199,8 +223,6 @@ export async function pullAndMergeCloudProfile(userId: string): Promise<Profile>
 
   let accountSeed = accountLocal;
   if (!hasProfileProgress(accountSeed) && hasProfileProgress(legacyShared)) {
-    // Só adota o legado compartilhado se for claramente a “fonte boa”
-    // (ex.: progresso local rico vs nuvem contaminada/zerada no Legado).
     if (!cloudHasProgress || profileProgressScore(legacyShared) > profileProgressScore(cloud) * 1.25) {
       accountSeed = legacyShared;
     }
@@ -210,21 +232,23 @@ export async function pullAndMergeCloudProfile(userId: string): Promise<Profile>
   if (!cloudHasProgress) {
     merged = hasProfileProgress(accountSeed) ? accountSeed : cloud;
   } else if (!hasProfileProgress(accountSeed)) {
-    // Conta na nuvem existe: convidado deste browser NÃO entra.
     merged = cloud;
   } else {
-    merged = mergeProfiles(accountSeed, cloud);
+    merged = mergeProfiles(accountSeed, cloud, row.updated_at);
   }
 
-  // Prefs da conta sempre da nuvem; áudio preservado do aparelho
   const localAudio = SaveManager.load().prefs;
   merged.prefs = {
+    ...merged.prefs,
     showNameTag: cloud.prefs?.showNameTag ?? false,
     acceptNewsletter: cloud.prefs?.acceptNewsletter ?? false,
     musicVolume: localAudio?.musicVolume ?? 0.7,
     sfxVolume: localAudio?.sfxVolume ?? 0.8,
     musicEnabled: localAudio?.musicEnabled ?? true,
     sfxEnabled: localAudio?.sfxEnabled ?? true,
+    muralVisibility: cloud.prefs?.muralVisibility ?? merged.prefs?.muralVisibility ?? 'public',
+    muralAlias: cloud.prefs?.muralAlias ?? merged.prefs?.muralAlias,
+    emblemEnabled: merged.prefs?.emblemEnabled ?? localAudio?.emblemEnabled,
   };
 
   SaveManager.save(merged, { skipCloud: true });
@@ -239,6 +263,7 @@ export async function pushCloudProfile(userId: string, profile: Profile): Promis
   const payload = {
     id: userId,
     currency: profile.currency,
+    resin: profile.resin ?? 0,
     meta_levels: profile.metaLevels,
     almanac: profile.almanac,
     best_scores: profile.bestScores ?? emptyBestScores(),

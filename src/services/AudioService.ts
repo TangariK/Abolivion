@@ -181,6 +181,7 @@ export class AudioService {
       wolf_king: 'music_boss_wolf',
       poisoner_master: 'music_boss_poison',
       acrobat_leap: 'music_boss_acrobat',
+      shield_master: 'music_boss_acrobat',
     };
     this.playMusic(map[bossId] ?? 'music_run');
   }

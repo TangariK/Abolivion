@@ -17,6 +17,29 @@ Documentação detalhada de cada release: [`docs/versions/`](docs/versions/).
 
 ---
 
+## [0.1.8] — 2026-07-29
+
+### Adicionado
+
+- Hub do menu: **Loja da Tribo** (Resina) e **Cabana do Pajé** (permanentes / emblemas / Arsenal / Ritos)
+- Moeda **Resina**; emblemas com efeitos ativos (Ninhada→loja+drops, Olhar→reroll, Matilha→corrida/stamina, Frasco→Marã analítico, Salto→Arsenal, Couraça→Clã)
+- Rodada 60: variantes blindadas, **Escudeiro**, chefão **Mestre do Escudo** + 4 cavaleiros + Emblema da Couraça
+- Escudo visual na fase de defesa do Mestre; admin pode **Liberar** emblemas na Cabana
+- Online: bosses/torretas no guest via snapshot; `firing` do guest; validação de peer/role nas mensagens
+- Salas: RLS só host muta (+ RPC guest-host); sync cloud LWW para moedas/meta/resina
+
+### Corrigido / Ajustado
+
+- Cache de profile e HUD dirty (menos `localStorage`/redesenho por frame)
+- Removido `seed` do protocolo online (guest não simula spawn)
+- Mestre do Escudo: dano na armadura (escudo só na defesa), cavaleiros mais fortes, corrida com overshoot, HUD (stamina vs texto), Clã relê emblema no clique
+
+### Adiado (próximas sessões)
+
+- Itens da Loja da Tribo; conteúdo do Arsenal / Ritos; Clã social; anti-cheat server-side completo; otimização profunda de snapshot
+
+---
+
 ## [0.1.7] — 2026-07-28
 
 ### Adicionado

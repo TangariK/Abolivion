@@ -83,9 +83,54 @@ export const RUN_UPGRADES: RunUpgradeDef[] = [
       stats.bleedDamageMul = Math.max(0.15, (stats.bleedDamageMul ?? 1) * 0.65);
     },
   },
+  {
+    id: 'second_chant',
+    name: 'Segundo Canto',
+    description: 'Mais 2 rerolls nesta run (1× por run)',
+    apply: () => {
+      // aplicado via UpgradeScene / GameScene (estado de reroll)
+    },
+  },
+  {
+    id: 'stamina_max',
+    name: 'Fôlego da Matilha',
+    description: '+25 stamina máxima',
+    apply: (stats: PlayerStats) => {
+      stats.staminaMax = (stats.staminaMax ?? 100) + 25;
+      stats.stamina = Math.min(stats.staminaMax, (stats.stamina ?? 0) + 25);
+    },
+  },
+  {
+    id: 'stamina_regen',
+    name: 'Respiro do Lobo',
+    description: '+8 regeneração de stamina /s',
+    apply: (stats: PlayerStats) => {
+      stats.staminaRegen = (stats.staminaRegen ?? 16) + 8;
+    },
+  },
+  {
+    id: 'sprint_speed',
+    name: 'Galope da Caçada',
+    description: '+12% velocidade na corrida',
+    apply: (stats: PlayerStats) => {
+      stats.sprintMul = (stats.sprintMul ?? 1.35) + 0.12;
+    },
+  },
 ];
 
-export function pickRandomUpgrades(count: number): RunUpgradeDef[] {
-  const shuffled = Phaser.Utils.Array.Shuffle([...RUN_UPGRADES]);
+export function pickRandomUpgrades(
+  count: number,
+  opts?: { allowStamina?: boolean; allowSecondChant?: boolean; secondChantTaken?: boolean },
+): RunUpgradeDef[] {
+  let pool = [...RUN_UPGRADES];
+  if (!opts?.allowStamina) {
+    pool = pool.filter(
+      (u) => u.id !== 'stamina_max' && u.id !== 'stamina_regen' && u.id !== 'sprint_speed',
+    );
+  }
+  if (!opts?.allowSecondChant || opts.secondChantTaken) {
+    pool = pool.filter((u) => u.id !== 'second_chant');
+  }
+  const shuffled = Phaser.Utils.Array.Shuffle(pool);
   return shuffled.slice(0, Math.min(count, shuffled.length));
 }

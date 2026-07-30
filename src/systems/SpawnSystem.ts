@@ -83,6 +83,9 @@ export class SpawnSystem {
     if (shouldPromoteElite(eliteChanceFromElapsedMs(this.elapsed), 'chance')) {
       enemy.promoteElite();
     }
+    if (this.elapsed >= 900_000 && Math.random() < 0.3) {
+      enemy.promoteArmoredVariant();
+    }
     this.onEncounter?.(type);
   }
 
@@ -131,6 +134,20 @@ export class SpawnSystem {
       if (roll < 0.88) return 'camo_normal';
       if (roll < 0.93) return 'lethargy_spitter';
       return 'poisoner';
+    }
+    // 15+ min: mix com Escudeiro / mais blindados
+    if (t >= 900) {
+      if (roll < 0.1) return 'escudeiro';
+      if (roll < 0.2) return 'tank';
+      if (roll < 0.3) return 'armored';
+      if (roll < 0.4) return 'bruiser';
+      if (roll < 0.5) return 'dire_wolf_brute';
+      if (roll < 0.58) return 'lethargy_brute';
+      if (roll < 0.66) return 'poisoner';
+      if (roll < 0.74) return 'camo_toxic_blade';
+      if (roll < 0.82) return 'backstabber';
+      if (roll < 0.9) return 'dire_wolf';
+      return 'normal';
     }
     if (roll < 0.08) return 'fast';
     if (roll < 0.16) return 'swift';

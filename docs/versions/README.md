@@ -4,6 +4,7 @@ Cada arquivo nesta pasta é um **snapshot** do jogo naquela release.
 
 | Versão | Data | Documento |
 |--------|------|-----------|
+| 0.1.8 | 2026-07-29 | [0.1.8.md](0.1.8.md) |
 | 0.1.7 | 2026-07-28 | [0.1.7.md](0.1.7.md) |
 | 0.1.6 | 2026-07-27 | [0.1.6.md](0.1.6.md) |
 | 0.1.5 | 2026-07-26 | [0.1.5.md](0.1.5.md) |

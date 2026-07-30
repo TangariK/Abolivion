@@ -11,7 +11,9 @@ import { MuralOverlay } from '../ui/MuralOverlay';
 import { SoundOptionsOverlay } from '../ui/SoundOptionsOverlay';
 import { AudioService } from '../services/AudioService';
 import { SaveManager } from '../upgrades/MetaUpgrades';
-import { META_UPGRADE_DEFS, metaCost, tryBuyMeta } from '../upgrades/MetaShop';
+import { CabinOverlay } from '../ui/CabinOverlay';
+import { ShopOverlay } from '../ui/ShopOverlay';
+import { activeCouraca, ownsEmblem } from '../data/EmblemRuntime';
 
 const MODE_LABELS: Record<GameModeId, string> = {
   infinite: 'Infinito',
@@ -23,7 +25,7 @@ const MODE_LABELS: Record<GameModeId, string> = {
 export class MenuScene extends Phaser.Scene {
   private profile!: Profile;
   private coinsText!: Phaser.GameObjects.Text;
-  private shopContainer!: Phaser.GameObjects.Container;
+  private hubContainer!: Phaser.GameObjects.Container;
   private modeButton!: Phaser.GameObjects.Rectangle;
   private modeButtonLabel!: Phaser.GameObjects.Text;
   private playersButton!: Phaser.GameObjects.Rectangle;
@@ -37,8 +39,13 @@ export class MenuScene extends Phaser.Scene {
   private profileButtonLabel!: Phaser.GameObjects.Text;
   private profileSilhouette!: Phaser.GameObjects.Graphics;
   private guestHint!: Phaser.GameObjects.Text;
+  private clanBg!: Phaser.GameObjects.Arc;
+  private clanGlyph!: Phaser.GameObjects.Text;
+  private clanLabel!: Phaser.GameObjects.Text;
   private profileOverlay = new ProfileOverlay();
   private muralOverlay = new MuralOverlay();
+  private shopOverlay = new ShopOverlay();
+  private cabinOverlay = new CabinOverlay();
   private freeSetup = new FreeModeSetupOverlay();
   private onlineLobby = new OnlineLobbyOverlay();
   private soundOverlay = new SoundOptionsOverlay();
@@ -92,7 +99,8 @@ export class MenuScene extends Phaser.Scene {
     this.refreshCoins();
     this.buildProfileButton();
     this.buildMuralButton();
-    this.buildShop();
+    this.buildClanButton();
+    this.buildHub();
     this.buildModeSelector();
     this.buildPlayersSelector();
     this.buildStartButton();
@@ -112,13 +120,21 @@ export class MenuScene extends Phaser.Scene {
       this.unsubAuth?.();
       this.profileOverlay.close();
       this.muralOverlay.close();
+      this.shopOverlay.close();
+      this.cabinOverlay.close();
       this.freeSetup.close();
       this.soundOverlay.close();
     });
   }
 
   private refreshCoins(): void {
-    this.coinsText.setText(`Moedas: ${this.profile.currency}`);
+    const resin = this.profile.resin ?? 0;
+    const showResin = (this.profile.almanac.emblems ?? []).includes('emblem_kurupi');
+    this.coinsText.setText(
+      showResin
+        ? `Moedas: ${this.profile.currency}  ·  Resina: ${resin}`
+        : `Moedas: ${this.profile.currency}`,
+    );
     if (this.profile.currency >= 200) {
       if (SaveManager.unlockAchievement('deep_pockets')) {
         this.toasts.enqueue('deep_pockets');
@@ -212,6 +228,150 @@ export class MenuScene extends Phaser.Scene {
       AudioService.playSfx('sfx_ui_click');
       this.lockUiInput();
       this.muralOverlay.open(() => this.unlockUiInputSoon());
+    });
+  }
+
+  private buildClanButton(): void {
+    const x = 120;
+    const y = 42;
+    this.clanBg = this.add
+      .circle(x, y, 26, 0x1a1a1a)
+      .setStrokeStyle(2, 0x555555)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(40);
+    this.clanGlyph = this.add
+      .text(x, y, 'Cl', {
+        fontFamily: 'Georgia, "Times New Roman", serif',
+        fontSize: '16px',
+        color: '#666',
+      })
+      .setOrigin(0.5)
+      .setDepth(41);
+    this.clanLabel = this.add
+      .text(x, y + 36, 'Clã', {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '11px',
+        color: '#666',
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(41);
+
+    this.refreshClanButton();
+
+    this.clanBg.on('pointerover', () => {
+      const unlocked = this.isClanUnlocked();
+      this.clanBg.setFillStyle(unlocked ? 0x243528 : 0x222);
+    });
+    this.clanBg.on('pointerout', () => {
+      const unlocked = this.isClanUnlocked();
+      this.clanBg.setFillStyle(unlocked ? 0x1a2a1e : 0x1a1a1a);
+    });
+    this.clanBg.on('pointerup', () => {
+      if (this.time.now < this.uiIgnoreUntil) return;
+      AudioService.playSfx('sfx_ui_click');
+      this.lockUiInput();
+      this.profile = SaveManager.load();
+      const unlocked = this.isClanUnlocked();
+      this.showToast(
+        unlocked
+          ? 'Clã — em breve (progressão coletiva).'
+          : ownsEmblem(this.profile, 'emblem_shield')
+            ? 'Ative o Emblema da Couraça na Cabana do Pajé.'
+            : 'Clã exige o Emblema da Couraça.',
+      );
+      this.unlockUiInputSoon();
+    });
+  }
+
+  private isClanUnlocked(): boolean {
+    return ownsEmblem(this.profile, 'emblem_shield') && activeCouraca(this.profile);
+  }
+
+  private refreshClanButton(): void {
+    if (!this.clanBg) return;
+    const unlocked = this.isClanUnlocked();
+    this.clanBg.setFillStyle(unlocked ? 0x1a2a1e : 0x1a1a1a);
+    this.clanBg.setStrokeStyle(2, unlocked ? COLORS.accent : 0x555555);
+    this.clanGlyph.setColor(unlocked ? '#f4d77b' : '#666');
+    this.clanLabel.setColor(unlocked ? '#c4a35a' : '#666');
+  }
+
+  private buildHub(): void {
+    this.hubContainer = this.add.container(GAME_WIDTH / 2, 350);
+
+    const makePlate = (
+      ox: number,
+      title: string,
+      subtitle: string,
+      fill: number,
+      stroke: number,
+      onOpen: () => void,
+    ) => {
+      const bg = this.add
+        .rectangle(ox, 0, 300, 120, fill, 0.95)
+        .setStrokeStyle(3, stroke)
+        .setInteractive({ useHandCursor: true });
+      const name = this.add
+        .text(ox, -18, title, {
+          fontFamily: 'Georgia, "Times New Roman", serif',
+          fontSize: '26px',
+          color: '#f4d77b',
+        })
+        .setOrigin(0.5);
+      const sub = this.add
+        .text(ox, 22, subtitle, {
+          fontFamily: 'Segoe UI, Tahoma, sans-serif',
+          fontSize: '13px',
+          color: '#a8c0a8',
+          align: 'center',
+          wordWrap: { width: 260 },
+        })
+        .setOrigin(0.5);
+      bg.on('pointerover', () => bg.setFillStyle(Phaser.Display.Color.IntegerToColor(fill).brighten(12).color, 0.95));
+      bg.on('pointerout', () => bg.setFillStyle(fill, 0.95));
+      bg.on('pointerup', () => {
+        if (this.time.now < this.uiIgnoreUntil) return;
+        AudioService.playSfx('sfx_ui_click');
+        this.lockUiInput();
+        onOpen();
+      });
+      this.hubContainer.add([bg, name, sub]);
+    };
+
+    makePlate(-170, 'Loja da Tribo', 'Seiva e trocas da aldeia', 0x2a1e14, 0xc4783a, () => {
+      this.shopOverlay.open(() => {
+        this.profile = SaveManager.load();
+        this.refreshCoins();
+        this.unlockUiInputSoon();
+      });
+    });
+    makePlate(170, 'Cabana do Pajé', 'Melhorias, emblemas e ritos', 0x1a2a1e, COLORS.accent, () => {
+      this.cabinOverlay.open(() => {
+        this.profile = SaveManager.load();
+        this.refreshCoins();
+        this.refreshClanButton();
+        this.unlockUiInputSoon();
+      });
+    });
+  }
+
+  private showToast(msg: string): void {
+    const t = this.add
+      .text(GAME_WIDTH / 2, GAME_HEIGHT - 120, msg, {
+        fontFamily: 'Segoe UI, Tahoma, sans-serif',
+        fontSize: '16px',
+        color: '#f4d77b',
+        backgroundColor: '#0d1a12',
+        padding: { x: 12, y: 8 },
+      })
+      .setOrigin(0.5)
+      .setDepth(80);
+    this.tweens.add({
+      targets: t,
+      alpha: 0,
+      delay: 1600,
+      duration: 400,
+      onComplete: () => t.destroy(),
     });
   }
 
@@ -505,79 +665,6 @@ export class MenuScene extends Phaser.Scene {
       }
 
       this.dropdown?.add([bg, label]);
-    });
-  }
-
-  private buildShop(): void {
-    this.shopContainer = this.add.container(GAME_WIDTH / 2, 340);
-
-    const title = this.add
-      .text(0, -150, 'Melhorias Permanentes', {
-        fontFamily: 'Georgia, "Times New Roman", serif',
-        fontSize: '24px',
-        color: '#c4a35a',
-      })
-      .setOrigin(0.5);
-    this.shopContainer.add(title);
-
-    META_UPGRADE_DEFS.forEach((def, i) => {
-      const x = (i - 2) * 175;
-      const level = this.profile.metaLevels[def.id];
-      const cost = metaCost(level);
-      const maxed = level >= def.maxLevel;
-
-      const bg = this.add
-        .rectangle(x, 0, 162, 130, COLORS.cardBg, 0.95)
-        .setStrokeStyle(2, COLORS.cardBorder)
-        .setInteractive({ useHandCursor: true });
-
-      const name = this.add
-        .text(x, -42, def.name, {
-          fontFamily: 'Segoe UI, Tahoma, sans-serif',
-          fontSize: '17px',
-          color: '#e8f0e8',
-        })
-        .setOrigin(0.5);
-
-      const desc = this.add
-        .text(x, -14, def.description, {
-          fontFamily: 'Segoe UI, Tahoma, sans-serif',
-          fontSize: '11px',
-          color: '#a8c0a8',
-          align: 'center',
-          wordWrap: { width: 148 },
-        })
-        .setOrigin(0.5);
-
-      const levelText = this.add
-        .text(x, 24, `Nível ${level}/${def.maxLevel}`, {
-          fontFamily: 'Segoe UI, Tahoma, sans-serif',
-          fontSize: '13px',
-          color: '#c4a35a',
-        })
-        .setOrigin(0.5);
-
-      const costText = this.add
-        .text(x, 46, maxed ? 'MÁXIMO' : `${cost} moedas`, {
-          fontFamily: 'Segoe UI, Tahoma, sans-serif',
-          fontSize: '13px',
-          color: maxed ? '#666' : '#e8f0e8',
-        })
-        .setOrigin(0.5);
-
-      bg.on('pointerover', () => bg.setFillStyle(0x243528, 0.95));
-      bg.on('pointerout', () => bg.setFillStyle(COLORS.cardBg, 0.95));
-      bg.on('pointerdown', () => {
-        const result = tryBuyMeta(def.id);
-        if (result.ok) AudioService.playSfx('sfx_meta_buy');
-        else AudioService.playSfx('sfx_ui_click');
-        this.profile = result.profile;
-        this.refreshCoins();
-        this.shopContainer.destroy(true);
-        this.buildShop();
-      });
-
-      this.shopContainer.add([bg, name, desc, levelText, costText]);
     });
   }
 

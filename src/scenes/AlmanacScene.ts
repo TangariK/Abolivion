@@ -7,6 +7,7 @@ import {
 } from '../data/Achievements';
 import { BOSS_DEFS, ENEMY_DEFS } from '../data/EnemyCatalog';
 import { EMBLEMS } from '../data/Emblems';
+import { activeFrasco } from '../data/EmblemRuntime';
 import type { AchievementTier } from '../data/types';
 import { AMULETS, moonLabel } from '../upgrades/Amulets';
 import { SaveManager } from '../upgrades/MetaUpgrades';
@@ -234,26 +235,32 @@ export class AlmanacScene extends Phaser.Scene {
         symbol: '+',
       }));
     } else if (tab === 'enemies') {
+      const analytical = activeFrasco(profile);
       entries = Object.values(ENEMY_DEFS).map((enemy) => ({
         id: enemy.type,
         title: enemy.name,
         description: enemy.description,
-        detail: `HP ${enemy.hp} · Vel ${enemy.speed} · Dano ${enemy.damage} · XP ${enemy.xp}${
-          enemy.armor ? ` · Armadura ${enemy.armor}` : ''
-        }`,
+        detail: analytical
+          ? `HP ${enemy.hp} · Vel ${enemy.speed} · Dano ${enemy.damage} · XP ${enemy.xp}${
+            enemy.armor ? ` · Armadura ${enemy.armor}` : ''
+          }`
+          : undefined,
         textureKey: enemy.textureKey,
         unlocked: profile.almanac.enemies.includes(enemy.type),
         symbol: '!',
       }));
     } else if (tab === 'bosses') {
+      const analytical = activeFrasco(profile);
       entries = Object.values(BOSS_DEFS).map((boss) => ({
         id: boss.id,
         title: boss.name,
         description: boss.description,
         lore: boss.lore,
-        detail:
-          `Rodada ${boss.wave} · HP ${boss.hp} · Vel ${boss.speed} · Dano ${boss.damage}\n\n`
-          + `Triggered Mode — ${boss.triggeredMode.name}\n${boss.triggeredMode.description}`,
+        detail: analytical
+          ? `Rodada ${boss.wave} · HP ${boss.hp} · Vel ${boss.speed} · Dano ${boss.damage}${
+            boss.armor ? ` · Armadura ${boss.armor}` : ''
+          }\n\nTriggered Mode — ${boss.triggeredMode.name}\n${boss.triggeredMode.description}`
+          : `Rodada ${boss.wave}\n\nTriggered Mode — ${boss.triggeredMode.name}\n${boss.triggeredMode.description}`,
         textureKey: boss.textureKey,
         unlocked: profile.almanac.bosses.includes(boss.id),
         symbol: 'B',

@@ -35,7 +35,6 @@ export interface OnlineCountdownMsg {
 
 export interface OnlineStartMsg {
   type: 'start';
-  seed: number;
 }
 
 export interface OnlinePeerLeftMsg {
@@ -49,9 +48,30 @@ export interface OnlineChoiceLockMsg {
   locked: boolean;
 }
 
+export interface OnlineSnapshotEnemy {
+  id: number;
+  x: number;
+  y: number;
+  type: string;
+  hp: number;
+  maxHp: number;
+  armor: number;
+  isBoss?: boolean;
+  bossId?: string;
+  triggered?: boolean;
+}
+
+export interface OnlineSnapshotTurret {
+  id: number;
+  x: number;
+  y: number;
+  hp: number;
+}
+
 export interface OnlineSnapshotMsg {
   type: 'snapshot';
   t: number;
+  fromPeerId: string;
   players: Array<{
     peerId: string;
     x: number;
@@ -70,14 +90,8 @@ export interface OnlineSnapshotMsg {
     xpPickupRadius: number;
     xpGainBonus: number;
   }>;
-  enemies: Array<{
-    id: number;
-    x: number;
-    y: number;
-    type: string;
-    hp: number;
-    armor: number;
-  }>;
+  enemies: OnlineSnapshotEnemy[];
+  turrets?: OnlineSnapshotTurret[];
   kills: number;
   level: number;
   xpProgress: number;
@@ -94,8 +108,8 @@ export type OnlineMsg =
   | OnlinePeerLeftMsg
   | OnlineChoiceLockMsg
   | OnlineSnapshotMsg
-  | { type: 'reviveAlly'; targetPeerId: string; hpRatio: number }
-  | { type: 'soloContinue' };
+  | { type: 'reviveAlly'; fromPeerId: string; targetPeerId: string; hpRatio: number }
+  | { type: 'soloContinue'; fromPeerId: string };
 
 type MsgHandler = (msg: OnlineMsg) => void;
 

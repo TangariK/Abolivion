@@ -129,6 +129,10 @@ export class WaveSystem {
       this.spawnBoss('acrobat_leap');
       return;
     }
+    if (this.wave === 60) {
+      this.spawnBoss('shield_master');
+      return;
+    }
 
     const count = Math.min(8 + this.wave * 3, 78);
     let spawned = 0;
@@ -165,6 +169,7 @@ export class WaveSystem {
     if (!enemy) return false;
     enemy.spawn(pos.x, pos.y, type);
     if (shouldPromoteElite(this.wave)) enemy.promoteElite();
+    if (this.wave >= 60 && Math.random() < 0.28) enemy.promoteArmoredVariant();
     this.onEncounter(type);
     return true;
   }
@@ -182,6 +187,20 @@ export class WaveSystem {
   private pickType(): EnemyType {
     const w = this.wave;
     const roll = Math.random();
+
+    if (w >= 60) {
+      if (roll < 0.12) return 'escudeiro';
+      if (roll < 0.22) return 'tank';
+      if (roll < 0.32) return 'armored';
+      if (roll < 0.42) return 'bruiser';
+      if (roll < 0.52) return 'dire_wolf_brute';
+      if (roll < 0.6) return 'lethargy_brute';
+      if (roll < 0.68) return 'poisoner';
+      if (roll < 0.76) return 'camo_toxic_blade';
+      if (roll < 0.84) return 'backstabber';
+      if (roll < 0.92) return 'dire_wolf';
+      return 'normal';
+    }
 
     if (w <= 2) {
       return roll < 0.7 ? 'fast' : 'normal';

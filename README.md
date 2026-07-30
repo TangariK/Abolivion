@@ -4,7 +4,7 @@ Roguelite top-down (estilo *Vampire Survivors*), feito com **TypeScript**, **Pha
 
 **Jogue no navegador:** [Game Jolt — Abolivion](https://gamejolt.com/games/abolivion/1086828)
 
-**Versão atual:** `0.1.7` — ver [CHANGELOG](CHANGELOG.md) · [notas 0.1.7](docs/versions/0.1.7.md)
+**Versão atual:** `0.1.8` — ver [CHANGELOG](CHANGELOG.md) · [notas 0.1.8](docs/versions/0.1.8.md)
 
 ---
 

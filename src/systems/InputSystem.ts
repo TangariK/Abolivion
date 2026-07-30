@@ -6,6 +6,7 @@ export type ControlScheme = 'solo' | 'local2' | 'online';
 
 export class InputSystem {
   private readonly escape: Phaser.Input.Keyboard.Key;
+  private readonly shift: Phaser.Input.Keyboard.Key;
   private readonly wasd: {
     W: Phaser.Input.Keyboard.Key;
     A: Phaser.Input.Keyboard.Key;
@@ -50,6 +51,11 @@ export class InputSystem {
       L: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L),
     };
     this.escape = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    this.shift = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
+  }
+
+  isSprintHeld(): boolean {
+    return this.shift.isDown;
   }
 
   /** Direções WASD atuais (para sync online). */

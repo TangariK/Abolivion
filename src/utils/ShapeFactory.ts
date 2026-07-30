@@ -22,6 +22,11 @@ export class ShapeFactory {
     this.bladeEnemy(scene, 'enemy_camo_toxic_blade', 22, 0x1e2e24);
     this.circle(scene, 'enemy_lethargy_spitter', 26, 0x7a5ab0);
     this.circle(scene, 'enemy_lethargy_brute', 32, 0x5a3a90);
+    this.circle(scene, 'enemy_escudeiro', 30, 0x8a9aaa);
+    this.bladeEnemy(scene, 'enemy_knight_sword', 30, 0xb05040);
+    this.circle(scene, 'enemy_knight_crossbow', 28, 0x6a7080);
+    this.circle(scene, 'enemy_knight_vial', 28, 0x5a8a40);
+    this.circle(scene, 'enemy_knight_healer', 28, 0xd0c060);
     this.circle(scene, 'projectile', 10, COLORS.projectile);
     this.circle(scene, 'boss_shot', 12, 0xff6b2d);
     this.hexagon(scene, 'xp_orb', 12, COLORS.xpOrb);
@@ -31,6 +36,8 @@ export class ShapeFactory {
     this.wolf(scene, 'boss_wolf_king', 44, 0x1a1010);
     this.boss(scene, 'boss_poisoner_master', 60, 0x3d6a28);
     this.acrobat(scene, 'boss_acrobat', 56, 0xc4a06a);
+    this.boss(scene, 'boss_shield_master', 76, 0x6a7a8a);
+    this.bossShield(scene, 'fx_boss_shield', 56);
     this.circle(scene, 'poison_shot', 14, 0x6bc24a);
     this.circle(scene, 'poison_shot_purple', 14, 0x9a6ad4);
     this.circle(scene, 'poison_puddle', 8, 0x3d8a2a);
@@ -41,6 +48,8 @@ export class ShapeFactory {
     this.emblem(scene, 'emblem_wolf', 0x4a3a3a);
     this.emblem(scene, 'emblem_poison', 0x3d6a28);
     this.emblem(scene, 'emblem_acrobat', 0xc4a06a);
+    this.emblem(scene, 'emblem_shield', 0x6a7a8a);
+    this.hexagon(scene, 'resin_orb', 14, 0xc4783a);
     this.amuletIcon(scene, 'amulet_araci', COLORS.accent, 'parallel');
     this.amuletIcon(scene, 'amulet_jaci', 0xd4a017, 'diagonal');
     this.amuletIcon(scene, 'amulet_anhanga', 0x8f6b3a, 'ring');
@@ -254,6 +263,48 @@ export class ShapeFactory {
     g.fillCircle(r + size * 0.15, r - size * 0.08, size * 0.07);
     g.lineStyle(3, 0x8b5a2b, 1);
     g.strokeCircle(r, r + size * 0.05, size * 0.35);
+    g.generateTexture(key, size, size);
+    g.destroy();
+  }
+
+  /** Escudo heráldico usado na defesa do Mestre do Escudo. */
+  private static bossShield(scene: Phaser.Scene, key: string, size: number): void {
+    if (scene.textures.exists(key)) return;
+    const g = scene.make.graphics({ x: 0, y: 0 });
+    const cx = size / 2;
+    const top = size * 0.12;
+    const midY = size * 0.42;
+    const bottom = size * 0.92;
+    const halfW = size * 0.36;
+
+    // Corpo do escudo (heater)
+    g.fillStyle(0xc8d4e0, 1);
+    g.beginPath();
+    g.moveTo(cx - halfW, top);
+    g.lineTo(cx + halfW, top);
+    g.lineTo(cx + halfW * 1.05, midY);
+    g.lineTo(cx, bottom);
+    g.lineTo(cx - halfW * 1.05, midY);
+    g.closePath();
+    g.fillPath();
+
+    g.lineStyle(3, 0x3a4a58, 1);
+    g.beginPath();
+    g.moveTo(cx - halfW, top);
+    g.lineTo(cx + halfW, top);
+    g.lineTo(cx + halfW * 1.05, midY);
+    g.lineTo(cx, bottom);
+    g.lineTo(cx - halfW * 1.05, midY);
+    g.closePath();
+    g.strokePath();
+
+    // Brilho / boss accent
+    g.fillStyle(0xf4d77b, 0.95);
+    g.fillCircle(cx, midY * 0.85, size * 0.1);
+    g.lineStyle(2, 0x8a9aaa, 0.8);
+    g.lineBetween(cx, top + 6, cx, bottom - 10);
+    g.lineBetween(cx - halfW * 0.55, midY * 0.7, cx + halfW * 0.55, midY * 0.7);
+
     g.generateTexture(key, size, size);
     g.destroy();
   }

@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 
 /** Bastão-torreta do Boitatá — atira em linha no player. */
 export class BossTurret extends Phaser.Physics.Arcade.Sprite {
+  private static nextNetId = 900000;
+  netId = 0;
   hp = 80;
   maxHp = 80;
   nextShot = 0;
@@ -19,6 +21,7 @@ export class BossTurret extends Phaser.Physics.Arcade.Sprite {
 
   spawn(x: number, y: number, ownerNetId: number): void {
     this.ownerBossNetId = ownerNetId;
+    this.netId = BossTurret.nextNetId++;
     this.hp = 80;
     this.maxHp = 80;
     this.nextShot = 0;

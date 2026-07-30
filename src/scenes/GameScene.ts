@@ -9,6 +9,11 @@ import {
 } from '../config/GameConfig';
 import { FREE_MODE_ACHIEVEMENTS } from '../data/Achievements';
 import { emblemForBoss, getEmblem } from '../data/Emblems';
+import {
+  activeMatilha,
+  activeNinhada,
+  activeOlhar,
+} from '../data/EmblemRuntime';
 import { BOSS_DEFS, ENEMY_DEFS } from '../data/EnemyCatalog';
 import { GameSettingsStore } from '../data/GameModeStore';
 import type {
@@ -19,6 +24,7 @@ import type {
   FreeModeConfig,
   GameModeId,
   PlayerStats,
+  Profile,
   RunAmuletState,
   RunSummary,
 } from '../data/types';
@@ -30,6 +36,7 @@ import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { PoisonPuddle } from '../entities/PoisonPuddle';
 import { Projectile } from '../entities/Projectile';
+import { ResinPickup } from '../entities/ResinPickup';
 import { XPOrb } from '../entities/XPOrb';
 import { AudioService } from '../services/AudioService';
 import { AuthService } from '../services/AuthService';
@@ -73,6 +80,7 @@ export class GameScene extends Phaser.Scene {
   private remoteInput: {
     move: { up: boolean; down: boolean; left: boolean; right: boolean };
     aim: number;
+    firing: boolean;
   } | null = null;
   private lobbyBanner?: Phaser.GameObjects.Text;
   private deathBanner?: Phaser.GameObjects.Text;
@@ -143,7 +151,22 @@ export class GameScene extends Phaser.Scene {
   private poisonPuddles: PoisonPuddle[] = [];
   private turrets!: Phaser.Physics.Arcade.Group;
   private emblemPickups!: Phaser.Physics.Arcade.Group;
+  private resinPickups!: Phaser.Physics.Arcade.Group;
   private poisonAura?: Phaser.GameObjects.Arc;
+  private shieldVisual?: Phaser.GameObjects.Image;
+  private runProfile!: Profile;
+  private resinDropEnabled = false;
+  private matilhaEnabled = false;
+  private rerollsLeft = 0;
+  private secondChantTaken = false;
+  private staminaBarBg?: Phaser.GameObjects.Graphics;
+  private staminaBarFill?: Phaser.GameObjects.Graphics;
+  private lastHudKey = '';
+  private shieldPhase: 'idle' | 'defend' | 'charge' = 'idle';
+  private shieldPhaseUntil = 0;
+  private nextKnightShot = 0;
+  private nextHealerTick = 0;
+  private shieldTrailUntil = 0;
 
   constructor() {
     super('GameScene');
@@ -197,6 +220,13 @@ export class GameScene extends Phaser.Scene {
     this.tookDamage = false;
     this.tookDamageDuringKurupi = false;
     this.kurupiMinionKills = 0;
+    this.shieldPhase = 'idle';
+    this.shieldPhaseUntil = 0;
+    this.shieldTrailUntil = 0;
+    this.lastHudKey = '';
+    this.secondChantTaken = false;
+    this.nextKnightShot = 0;
+    this.nextHealerTick = 0;
     this.lastAmuletWasThreeMoons = false;
     this.freeConfig = this.mode === 'free' ? GameSettingsStore.getFreeConfig() : undefined;
     this.customSpawnDone = false;
@@ -205,6 +235,7 @@ export class GameScene extends Phaser.Scene {
     this.poisonPuddles = [];
     this.poisonAura?.destroy();
     this.poisonAura = undefined;
+    this.clearShieldVisual();
     this.statusHudLabels = [];
     this.statusHudRoot = undefined;
     this.statusHudGfx = undefined;
@@ -235,6 +266,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     const profile = SaveManager.load();
+    this.runProfile = profile;
+    this.resinDropEnabled = activeNinhada(profile);
+    this.matilhaEnabled = activeMatilha(profile);
+    this.rerollsLeft = activeOlhar(profile) ? 1 : 0;
+    this.secondChantTaken = false;
     const baseStats: PlayerStats = {
       maxHp: PLAYER_BASE.hp,
       hp: PLAYER_BASE.hp,
@@ -246,6 +282,10 @@ export class GameScene extends Phaser.Scene {
       xpGainBonus: PLAYER_BASE.xpGainBonus,
       poisonDamageMul: PLAYER_BASE.poisonDamageMul,
       bleedDamageMul: PLAYER_BASE.bleedDamageMul,
+      staminaMax: this.matilhaEnabled ? 100 : undefined,
+      stamina: this.matilhaEnabled ? 100 : undefined,
+      staminaRegen: this.matilhaEnabled ? 16 : undefined,
+      sprintMul: this.matilhaEnabled ? 1.35 : undefined,
     };
     let stats: PlayerStats;
     if (this.freeConfig) {
@@ -312,6 +352,9 @@ export class GameScene extends Phaser.Scene {
           this.showToast(`${BOSS_DEFS[id].name}!`);
           AudioService.playSfx('sfx_boss_appear');
           AudioService.playBossMusic(id);
+          if (id === 'shield_master') {
+            this.time.delayedCall(80, () => this.spawnShieldKnights());
+          }
         },
         onWaveCleared: (wave) => {
           this.showToast(`Rodada ${wave} concluída`);
@@ -335,6 +378,9 @@ export class GameScene extends Phaser.Scene {
             this.showToast(`${BOSS_DEFS[id].name}!`);
             AudioService.playSfx('sfx_boss_appear');
             AudioService.playBossMusic(id);
+            if (id === 'shield_master') {
+              this.time.delayedCall(80, () => this.spawnShieldKnights());
+            }
           },
           onWaveCleared: () => this.freeVictory(),
         },
@@ -404,6 +450,11 @@ export class GameScene extends Phaser.Scene {
       maxSize: 12,
       runChildUpdate: false,
     });
+    this.resinPickups = this.physics.add.group({
+      classType: ResinPickup,
+      maxSize: 40,
+      runChildUpdate: false,
+    });
 
     if (this.freeConfig) {
       for (const id of this.freeConfig.amulets) this.applyAmulet(id);
@@ -418,6 +469,7 @@ export class GameScene extends Phaser.Scene {
 
     this.events.once('shutdown', () => {
       this.unsubOnline?.();
+      this.clearShieldVisual();
       this.weapon1.destroy();
       this.weapon2?.destroy();
       this.spawner?.destroy();
@@ -549,6 +601,9 @@ export class GameScene extends Phaser.Scene {
         enemy.spawnBoss(pos.x, pos.y, def);
         SaveManager.discoverBoss(id);
         total += 1;
+        if (id === 'shield_master') {
+          this.time.delayedCall(80, () => this.spawnShieldKnights());
+        }
       }
     }
     this.customTotal = Math.max(total, 1);
@@ -597,6 +652,13 @@ export class GameScene extends Phaser.Scene {
       if (!proj.active || !enemy.active) return;
       // Convidado: tiros são cosméticos — dano real só no host
       if (this.online && this.onlineRole === 'guest') {
+        proj.deactivate();
+        return;
+      }
+      if (enemy.reflecting) {
+        const ang = Phaser.Math.Angle.Between(enemy.x, enemy.y, proj.x, proj.y);
+        const shot = this.bossShots.get() as BossProjectile | null;
+        if (shot) shot.fire(enemy.x, enemy.y, ang + Math.PI, 380, Math.max(10, Math.floor(proj.damage * 0.7)));
         proj.deactivate();
         return;
       }
@@ -696,9 +758,34 @@ export class GameScene extends Phaser.Scene {
         this.showToast(`${def.name} obtido!`);
         pickup.deactivate();
       });
+
+      this.physics.add.overlap(player, this.resinPickups, (_p, resinObj) => {
+        const pickup = resinObj as ResinPickup;
+        if (!pickup.active || player.isDead()) return;
+        if (this.online && this.onlineRole === 'guest') {
+          pickup.deactivate();
+          return;
+        }
+        SaveManager.addResin(pickup.amount);
+        this.runProfile = SaveManager.load();
+        this.showToast(`+${pickup.amount} Resina`);
+        pickup.deactivate();
+      });
     }
 
-    this.physics.add.collider(this.enemies, this.enemies);
+    this.physics.add.collider(
+      this.enemies,
+      this.enemies,
+      undefined,
+      (a, b) => {
+        const ea = a as Enemy;
+        const eb = b as Enemy;
+        // Cavaleiros do Mestre não colidem com o próprio boss (evita ficarem engolidos)
+        if (ea.isBoss && eb.bondedBossNetId === ea.netId) return false;
+        if (eb.isBoss && ea.bondedBossNetId === eb.netId) return false;
+        return true;
+      },
+    );
   }
 
   private collectOrb(orb: XPOrb): void {
@@ -774,11 +861,25 @@ export class GameScene extends Phaser.Scene {
         this.poisonAura?.destroy();
         this.poisonAura = undefined;
       }
+      if (enemy.bossId === 'shield_master') {
+        this.clearShieldVisual();
+        this.clearBondedKnights(enemy.netId);
+      }
     }
 
     const xp = Math.max(1, Math.floor(enemy.xpValue * (1 + this.player1.stats.xpGainBonus)));
     const orb = this.xpOrbs.get() as XPOrb | null;
     if (orb) orb.spawn(enemy.x, enemy.y, xp, enemy.isBoss);
+
+    if (
+      this.resinDropEnabled
+      && !enemy.isBoss
+      && !(this.online && this.onlineRole === 'guest')
+      && Math.random() < 0.045
+    ) {
+      const resin = this.resinPickups.get() as ResinPickup | null;
+      if (resin) resin.spawn(enemy.x + Phaser.Math.Between(-8, 8), enemy.y + Phaser.Math.Between(-8, 8), 1);
+    }
 
     if (enemy.isBoss && enemy.bossId) {
       const emblem = emblemForBoss(enemy.bossId);
@@ -790,7 +891,47 @@ export class GameScene extends Phaser.Scene {
 
     enemy.deactivate();
     this.waves?.notifyKill();
-    this.redrawHud();
+    this.markHudDirty();
+  }
+
+  private clearBondedKnights(bossNetId: number): void {
+    for (const e of this.enemies.getChildren() as Enemy[]) {
+      if (e.active && e.bondedBossNetId === bossNetId) {
+        e.deactivate();
+      }
+    }
+  }
+
+  private spawnShieldKnights(): void {
+    const boss = (this.enemies.getChildren() as Enemy[]).find(
+      (e) => e.active && e.isBoss && e.bossId === 'shield_master',
+    );
+    if (!boss) return;
+    const roles: EnemyType[] = [
+      'knight_sword',
+      'knight_crossbow',
+      'knight_vial',
+      'knight_healer',
+    ];
+    const bossR = (boss.body as Phaser.Physics.Arcade.Body).radius || 38;
+    const orbit = bossR + 110;
+    roles.forEach((type, i) => {
+      // Não recria se já existe vivo
+      const exists = (this.enemies.getChildren() as Enemy[]).some(
+        (e) => e.active && e.bondedBossNetId === boss.netId && e.enemyType === type,
+      );
+      if (exists) return;
+      const enemy = this.enemies.get() as Enemy | null;
+      if (!enemy) return;
+      const ang = (Math.PI / 2) * i + 0.35;
+      const x = Phaser.Math.Clamp(boss.x + Math.cos(ang) * orbit, 40, WORLD_WIDTH - 40);
+      const y = Phaser.Math.Clamp(boss.y + Math.sin(ang) * orbit, 40, WORLD_HEIGHT - 40);
+      enemy.spawn(x, y, type);
+      enemy.bondedBossNetId = boss.netId;
+      enemy.orbitAngle = ang;
+      if (this.waves) this.waves.totalInWave += 1;
+      SaveManager.discoverEnemy(type);
+    });
   }
 
   private clearTurretsForBoss(ownerNetId: number): void {
@@ -811,6 +952,10 @@ export class GameScene extends Phaser.Scene {
 
   private maybeEnterTriggered(enemy: Enemy): void {
     if (!enemy.active || !enemy.isBoss || enemy.triggered) return;
+    if (enemy.bossId === 'shield_master') {
+      if (enemy.armor <= 0 && enemy.hp <= enemy.maxHp * 0.55) this.enterTriggeredMode(enemy);
+      return;
+    }
     if (enemy.hp <= enemy.maxHp * 0.5) this.enterTriggeredMode(enemy);
   }
 
@@ -836,6 +981,27 @@ export class GameScene extends Phaser.Scene {
         .circle(boss.x, boss.y, 70, 0x6a40a0, 0.18)
         .setStrokeStyle(2, 0xb48cff, 0.55)
         .setDepth(4);
+    }
+    if (boss.bossId === 'shield_master') {
+      boss.armor = Math.max(boss.armor, 600);
+      boss.setTint(0xb0c4d8);
+      boss.moveSpeed = Math.floor(BOSS_DEFS.shield_master.speed * 1.35);
+      boss.contactDamage = Math.floor(BOSS_DEFS.shield_master.damage * 1.3);
+      this.spawnShieldKnights();
+      this.buffBondedKnights(boss.netId, true);
+    }
+  }
+
+  private buffBondedKnights(bossNetId: number, triggered: boolean): void {
+    for (const e of this.enemies.getChildren() as Enemy[]) {
+      if (!e.active || e.bondedBossNetId !== bossNetId) continue;
+      const def = ENEMY_DEFS[e.enemyType as EnemyType];
+      if (!def) continue;
+      if (triggered) {
+        e.armor = Math.max(e.armor, 55);
+        e.moveSpeed = Math.floor(def.speed * 1.35);
+        e.contactDamage = Math.floor(def.damage * 1.2);
+      }
     }
   }
 
@@ -886,6 +1052,17 @@ export class GameScene extends Phaser.Scene {
       ownedAmulets: [...this.amulets.owned],
       pickCtx,
       resumeGame: pauseGame,
+      rerollsLeft: this.rerollsLeft,
+      allowStaminaBuffs: this.matilhaEnabled,
+      allowSecondChant: activeOlhar(this.runProfile),
+      secondChantTaken: this.secondChantTaken,
+      onRerollUsed: () => {
+        this.rerollsLeft = Math.max(0, this.rerollsLeft - 1);
+      },
+      onSecondChant: () => {
+        this.secondChantTaken = true;
+        this.rerollsLeft += 2;
+      },
       onAmuletSelected: (id: AmuletId) => this.applyAmulet(id),
       onAchievement: (id: 'xp_scholar') => this.unlockAchievement(id),
       onComplete: () => {
@@ -1023,6 +1200,7 @@ export class GameScene extends Phaser.Scene {
       this.unlockAchievement('online_ally_rise');
       void this.onlineSession?.send({
         type: 'reviveAlly',
+        fromPeerId: this.onlineSession.peerId,
         targetPeerId: this.peerIdForPlayer(dead),
         hpRatio: 0.55,
       });
@@ -1270,6 +1448,254 @@ export class GameScene extends Phaser.Scene {
     if (boss.bossId === 'acrobat_leap') {
       // Leap timing handled in movement loop
       this.nextBossAbility = time + 99999;
+      return;
+    }
+
+    if (boss.bossId === 'shield_master') {
+      // Movimento/escudo rodam continuamente no loop de inimigos
+      this.nextBossAbility = time + 400;
+      return;
+    }
+  }
+
+  private updateShieldMasterAI(boss: Enemy, time: number): void {
+    const baseSpd = BOSS_DEFS.shield_master.speed;
+    const idleSpd = baseSpd * (boss.triggered ? 1.28 : 1.08);
+    const chargeSpd = baseSpd * (boss.triggered ? 2.85 : 2.25);
+    const overshoot = boss.triggered ? 1.2 : 1.1;
+
+    // Primeira aparição: janela vulnerável antes do primeiro escudo
+    if (this.shieldPhase === 'idle' && this.shieldPhaseUntil <= 0) {
+      this.shieldPhaseUntil = time + 2400;
+      boss.reflecting = false;
+      if (boss.armor > 0) boss.setTint(0xb0c4d8);
+      return;
+    }
+
+    if (time < this.shieldPhaseUntil) {
+      if (this.shieldPhase === 'defend') {
+        boss.reflecting = true;
+        boss.moveSpeed = Math.floor(baseSpd * (boss.triggered ? 0.42 : 0.34));
+      } else if (this.shieldPhase === 'charge') {
+        boss.reflecting = false;
+        boss.moveSpeed = Math.floor(chargeSpd);
+        this.steerShieldCharge(boss, overshoot);
+      } else {
+        // idle vulnerável — dá para degradar armadura / HP
+        boss.reflecting = false;
+        boss.moveSpeed = idleSpd;
+        if (boss.armor > 0) boss.setTint(0xb0c4d8);
+        else boss.clearTint();
+      }
+      return;
+    }
+
+    // Fase acabou
+    if (this.shieldPhase === 'charge') {
+      for (const player of this.players) {
+        if (player.isDead()) continue;
+        const d = Phaser.Math.Distance.Between(boss.x, boss.y, player.x, player.y);
+        if (d < 130) {
+          const hit = player.takeDamage(Math.floor(boss.contactDamage * 1.4), time);
+          if (hit) {
+            this.onPlayerDamaged();
+            player.applyDizzy(time, boss.triggered ? 2800 : 1800);
+            const ang = Phaser.Math.Angle.Between(boss.x, boss.y, player.x, player.y);
+            player.setVelocity(Math.cos(ang) * 360, Math.sin(ang) * 360);
+          }
+        }
+      }
+      // Janela vulnerável após a carga
+      this.shieldPhase = 'idle';
+      this.shieldPhaseUntil = time + (boss.triggered ? 1600 : 2400);
+      boss.reflecting = false;
+      boss.moveSpeed = idleSpd;
+      if (boss.armor > 0) boss.setTint(0xb0c4d8);
+      else boss.clearTint();
+      return;
+    }
+
+    if (this.shieldPhase === 'defend') {
+      // Defend → charge com overshoot na direção do player
+      const target = this.nearestLivingPlayer(boss.x, boss.y) ?? this.player1;
+      const dist = Phaser.Math.Distance.Between(boss.x, boss.y, target.x, target.y);
+      const runDist = Math.max(140, dist * overshoot);
+      const duration = Phaser.Math.Clamp((runDist / chargeSpd) * 1000, 450, boss.triggered ? 1100 : 900);
+      this.shieldPhase = 'charge';
+      this.shieldPhaseUntil = time + duration;
+      boss.reflecting = false;
+      boss.moveSpeed = Math.floor(chargeSpd);
+      this.shieldTrailUntil = this.shieldPhaseUntil;
+      this.steerShieldCharge(boss, overshoot);
+      return;
+    }
+
+    // idle → defend (escudo ocasional)
+    if (boss.triggered && boss.armor < 500 && Math.random() < 0.45) {
+      boss.armor = Math.min(1800, boss.armor + 160);
+    }
+    this.shieldPhase = 'defend';
+    this.shieldPhaseUntil = time + (boss.triggered ? 1400 : 1700);
+    boss.reflecting = true;
+    boss.moveSpeed = Math.floor(baseSpd * (boss.triggered ? 0.42 : 0.34));
+    boss.setTint(0xd0e0f0);
+  }
+
+  /** Corrida: sempre aponta para um ponto 10%+ além do player (Triggered: 20%). */
+  private steerShieldCharge(boss: Enemy, overshoot: number): void {
+    const target = this.nearestLivingPlayer(boss.x, boss.y) ?? this.player1;
+    const dist = Phaser.Math.Distance.Between(boss.x, boss.y, target.x, target.y);
+    const runDist = Math.max(120, dist * overshoot);
+    const ang = Math.atan2(target.y - boss.y, target.x - boss.x);
+    const tx = Phaser.Math.Clamp(boss.x + Math.cos(ang) * runDist, 40, WORLD_WIDTH - 40);
+    const ty = Phaser.Math.Clamp(boss.y + Math.sin(ang) * runDist, 40, WORLD_HEIGHT - 40);
+    this.physics.moveTo(boss, tx, ty, boss.moveSpeed);
+  }
+
+  private syncShieldVisual(boss: Enemy): void {
+    if (!boss.active || !boss.reflecting) {
+      this.clearShieldVisual();
+      return;
+    }
+    if (!this.shieldVisual) {
+      this.shieldVisual = this.add
+        .image(boss.x, boss.y, 'fx_boss_shield')
+        .setDepth(10)
+        .setScale(1.15);
+    }
+    const target = this.nearestLivingPlayer(boss.x, boss.y) ?? this.player1;
+    const ang = Math.atan2(target.y - boss.y, target.x - boss.x);
+    const hold = 34;
+    this.shieldVisual.setVisible(true);
+    this.shieldVisual.setPosition(
+      boss.x + Math.cos(ang) * hold,
+      boss.y + Math.sin(ang) * hold,
+    );
+    this.shieldVisual.setRotation(ang + Math.PI / 2);
+    // Leve “pulse” enquanto bloqueia
+    const pulse = 1.1 + Math.sin(this.time.now / 140) * 0.06;
+    this.shieldVisual.setScale(pulse);
+    this.shieldVisual.setAlpha(0.92);
+  }
+
+  private clearShieldVisual(): void {
+    this.shieldVisual?.destroy();
+    this.shieldVisual = undefined;
+  }
+
+  private updateShieldKnights(time: number, delta: number): void {
+    const boss = (this.enemies.getChildren() as Enemy[]).find(
+      (e) => e.active && e.isBoss && e.bossId === 'shield_master',
+    );
+    if (!boss) return;
+
+    const bossR = (boss.body as Phaser.Physics.Arcade.Body).radius || 38;
+    const orbitDist = bossR + 105;
+
+    for (const e of this.enemies.getChildren() as Enemy[]) {
+      if (!e.active || e.bondedBossNetId !== boss.netId) continue;
+      const def = ENEMY_DEFS[e.enemyType as EnemyType];
+      const role = def?.knightRole;
+      const target = this.nearestLivingPlayer(e.x, e.y) ?? this.player1;
+
+      if (role === 'sword') {
+        // Agressivo: perseguem de perto, bem mais rápidos no Triggered
+        e.moveSpeed = def.speed * (boss.triggered ? 1.45 : 1.12);
+        e.contactDamage = Math.floor(def.damage * (boss.triggered ? 1.25 : 1));
+        const d = Phaser.Math.Distance.Between(e.x, e.y, target.x, target.y);
+        if (d > 22) {
+          this.physics.moveToObject(e, target, e.moveSpeed);
+        } else {
+          (e.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+        }
+      } else if (role === 'crossbow') {
+        // Órbita ao lado do boss — nunca empurra para o centro
+        const ox = boss.x + Math.cos(e.orbitAngle) * orbitDist;
+        const oy = boss.y + Math.sin(e.orbitAngle) * orbitDist;
+        const dist = Phaser.Math.Distance.Between(e.x, e.y, ox, oy);
+        if (dist > 18) {
+          this.physics.moveTo(e, ox, oy, def.speed * 1.1);
+        } else {
+          (e.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+          e.orbitAngle += 0.004 * delta;
+        }
+        if (time >= e.nextAbilityAt) {
+          e.nextAbilityAt = time + (boss.triggered ? 620 : 950);
+          const shotSpeed = boss.triggered ? 480 : 400;
+          const tBody = target.body as Phaser.Physics.Arcade.Body | undefined;
+          const lead = Phaser.Math.Distance.Between(e.x, e.y, target.x, target.y) / shotSpeed;
+          const predX = target.x + (tBody?.velocity.x ?? 0) * lead;
+          const predY = target.y + (tBody?.velocity.y ?? 0) * lead;
+          const ang = Math.atan2(predY - e.y, predX - e.x);
+          const shot = this.bossShots.get() as BossProjectile | null;
+          if (shot) {
+            const sx = e.x + Math.cos(ang) * 16;
+            const sy = e.y + Math.sin(ang) * 16;
+            const dmg = boss.triggered ? 28 : 22;
+            shot.fire(sx, sy, ang, shotSpeed, dmg);
+          }
+        }
+      } else if (role === 'vial') {
+        e.moveSpeed = def.speed * (boss.triggered ? 1.05 : 1);
+        const d = Phaser.Math.Distance.Between(e.x, e.y, target.x, target.y);
+        if (d > 160) e.chase(target);
+        else if (d < 90) {
+          const away = Math.atan2(e.y - target.y, e.x - target.x);
+          this.physics.velocityFromRotation(away, def.speed, (e.body as Phaser.Physics.Arcade.Body).velocity);
+        } else {
+          (e.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+        }
+        if (time >= e.nextAbilityAt) {
+          e.nextAbilityAt = time + (boss.triggered ? 900 : 1400);
+          const tx = target.x + Phaser.Math.Between(-20, 20);
+          const ty = target.y + Phaser.Math.Between(-20, 20);
+          const shot = this.bossShots.get() as BossProjectile | null;
+          if (shot) {
+            shot.firePoison(e.x, e.y, tx, ty, 280, 10, (x, y) => {
+              this.spawnPoisonPuddle(x, y, boss.triggered ? 4500 : 2800, true);
+            });
+          }
+        }
+      } else if (role === 'healer') {
+        // Sempre atrás do chefão (lado oposto ao player)
+        const hideAng = Math.atan2(target.y - boss.y, target.x - boss.x) + Math.PI;
+        const hideDist = orbitDist + (boss.triggered ? 36 : 28);
+        const hx = Phaser.Math.Clamp(boss.x + Math.cos(hideAng) * hideDist, 40, WORLD_WIDTH - 40);
+        const hy = Phaser.Math.Clamp(boss.y + Math.sin(hideAng) * hideDist, 40, WORLD_HEIGHT - 40);
+        this.physics.moveTo(e, hx, hy, def.speed * (boss.triggered ? 1.25 : 1.1));
+        if (time >= e.nextAbilityAt) {
+          e.nextAbilityAt = time + (boss.triggered ? 700 : 850);
+          const healBoss = boss.triggered ? 55 : 35;
+          const healAlly = boss.triggered ? 90 : 55;
+          if (!boss.reflecting) {
+            boss.hp = Math.min(boss.maxHp, boss.hp + healBoss);
+          }
+          for (const ally of this.enemies.getChildren() as Enemy[]) {
+            if (!ally.active || ally.bondedBossNetId !== boss.netId || ally === e) continue;
+            if (ally.hp < ally.maxHp) {
+              ally.hp = Math.min(ally.maxHp, ally.hp + healAlly);
+            }
+          }
+          if (e.hp < e.maxHp * 0.5) {
+            e.hp = Math.min(e.maxHp, e.hp + (boss.triggered ? 70 : 40));
+          }
+        }
+      }
+    }
+
+    if (boss.triggered && time % 5000 < delta + 20) {
+      this.spawnShieldKnights();
+      this.buffBondedKnights(boss.netId, true);
+    }
+
+    if (time < this.shieldTrailUntil && boss.active) {
+      for (const player of this.players) {
+        if (player.isDead()) continue;
+        if (Phaser.Math.Distance.Between(boss.x, boss.y, player.x, player.y) < 55) {
+          const hit = player.takeDamage(8, time);
+          if (hit) this.onPlayerDamaged();
+        }
+      }
     }
   }
 
@@ -1460,15 +1886,21 @@ export class GameScene extends Phaser.Scene {
     return best;
   }
 
+  private markHudDirty(): void {
+    this.lastHudKey = '';
+  }
+
   private createHud(): void {
     this.hpBarBg = this.add.graphics().setScrollFactor(0).setDepth(100);
     this.hpBarFill = this.add.graphics().setScrollFactor(0).setDepth(101);
     this.xpBarBg = this.add.graphics().setScrollFactor(0).setDepth(100);
     this.xpBarFill = this.add.graphics().setScrollFactor(0).setDepth(101);
+    this.staminaBarBg = this.add.graphics().setScrollFactor(0).setDepth(100);
+    this.staminaBarFill = this.add.graphics().setScrollFactor(0).setDepth(101);
     this.waveHudBg = this.add.graphics().setScrollFactor(0).setDepth(100);
     this.waveHudFill = this.add.graphics().setScrollFactor(0).setDepth(101);
 
-    const hudTextY = this.playerCount === 2 ? 74 : 52;
+    const hudTextY = this.playerCount === 2 ? 94 : 72;
     this.hudText = this.add
       .text(16, hudTextY, '', {
         fontFamily: 'Segoe UI, Tahoma, sans-serif',
@@ -1507,9 +1939,62 @@ export class GameScene extends Phaser.Scene {
     this.redrawAmuletBadges();
   }
 
+  private updateStamina(delta: number): void {
+    if (!this.matilhaEnabled) {
+      for (const p of this.players) p.moveSpeedMul = 1;
+      return;
+    }
+    const sprinting = this.inputSystem.isSprintHeld()
+      && this.combatStarted
+      && !this.choosingUpgrade
+      && !this.player1.isDead();
+    const max = this.player1.stats.staminaMax ?? 100;
+    const regen = this.player1.stats.staminaRegen ?? 16;
+    let stamina = this.player1.stats.stamina ?? max;
+    if (sprinting && stamina > 0) {
+      stamina = Math.max(0, stamina - (delta / 1000) * 28);
+      this.player1.moveSpeedMul = this.player1.stats.sprintMul ?? 1.35;
+    } else {
+      stamina = Math.min(max, stamina + (delta / 1000) * regen);
+      this.player1.moveSpeedMul = 1;
+    }
+    this.player1.stats.stamina = stamina;
+    this.player1.stats.staminaMax = max;
+    if (this.player2) {
+      this.player2.moveSpeedMul = 1;
+      this.player2.stats.stamina = stamina;
+      this.player2.stats.staminaMax = max;
+      this.player2.stats.staminaRegen = regen;
+      this.player2.stats.sprintMul = this.player1.stats.sprintMul;
+    }
+  }
+
+  private updateResinMagnet(): void {
+    if (!this.resinDropEnabled) return;
+    const magnetR = Math.max(40, (this.player1.stats.xpPickupRadius ?? 80) * 0.45);
+    for (const pickup of this.resinPickups.getChildren() as ResinPickup[]) {
+      if (!pickup.active) continue;
+      let best: Player | null = null;
+      let bestD = magnetR;
+      for (const p of this.players) {
+        if (p.isDead()) continue;
+        const d = Phaser.Math.Distance.Between(pickup.x, pickup.y, p.x, p.y);
+        if (d < bestD) {
+          bestD = d;
+          best = p;
+        }
+      }
+      if (best) {
+        this.physics.moveToObject(pickup, best, 140);
+      } else {
+        (pickup.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+      }
+    }
+  }
+
   private redrawAmuletBadges(): void {
     this.amuletBadges.removeAll(true);
-    const hudTextY = this.playerCount === 2 ? 74 : 52;
+    const hudTextY = this.playerCount === 2 ? 94 : 72;
     // Abaixo do texto de abates — sem cobrir HP/XP
     const y = hudTextY + 52;
     this.amulets.owned.forEach((id, index) => {
@@ -1528,10 +2013,33 @@ export class GameScene extends Phaser.Scene {
   }
 
   private redrawHud(): void {
+    const twoPlayers = this.playerCount === 2 && this.player2 !== undefined;
+    const hp1 = Math.ceil(this.player1.stats.hp);
+    const hp2 = this.player2 ? Math.ceil(this.player2.stats.hp) : 0;
+    const xpP = Math.floor(this.levelSystem.progress() * 1000);
+    const stamina = Math.floor(this.player1.stats.stamina ?? 0);
+    const waveKey = this.waves
+      ? `${this.waves.wave}:${this.waves.phase}:${Math.ceil(this.waves.remaining)}:${Math.ceil(this.waves.intermissionMs / 250)}`
+      : 'x';
+    const boss = (this.enemies.getChildren() as Enemy[]).find((e) => e.active && e.isBoss);
+    const key = [
+      hp1,
+      hp2,
+      xpP,
+      this.kills,
+      this.levelSystem.level,
+      Math.floor(this.survivalMs / 250),
+      stamina,
+      waveKey,
+      boss ? `${boss.hp}:${boss.armor}:${boss.triggered ? 1 : 0}` : '0',
+      this.resinDropEnabled ? (this.runProfile.resin ?? 0) : -1,
+    ].join('|');
+    if (key === this.lastHudKey) return;
+    this.lastHudKey = key;
+
     const barW = 280;
     const barH = 16;
     const x = 16;
-    const twoPlayers = this.playerCount === 2 && this.player2 !== undefined;
 
     this.hpBarBg.clear();
     this.hpBarFill.clear();
@@ -1558,10 +2066,23 @@ export class GameScene extends Phaser.Scene {
     this.xpBarFill.clear().fillStyle(COLORS.hudXp, 1)
       .fillRect(x, xpY, barW * Phaser.Math.Clamp(xpRatio, 0, 1), 10);
 
+    this.staminaBarBg?.clear();
+    this.staminaBarFill?.clear();
+    if (this.matilhaEnabled && this.player1.stats.staminaMax) {
+      const stY = xpY + 14;
+      const stRatio = (this.player1.stats.stamina ?? 0) / this.player1.stats.staminaMax;
+      this.staminaBarBg!.fillStyle(COLORS.hudBg, 0.85).fillRect(x, stY, barW, 6);
+      this.staminaBarFill!.fillStyle(0xd4a05a, 1)
+        .fillRect(x, stY, barW * Phaser.Math.Clamp(stRatio, 0, 1), 6);
+    }
+
     const modeLabel =
       this.mode === 'waves' ? 'Rodadas' : this.mode === 'free' ? 'Livre' : 'Infinito';
+    const resinBit = this.resinDropEnabled
+      ? `  ·  Resina ${this.runProfile.resin ?? 0}`
+      : '';
     this.hudText.setText(
-      `${modeLabel}  |  Nv ${this.levelSystem.level}  |  Abates ${this.kills}  |  ${formatDuration(this.survivalMs)}`,
+      `${modeLabel}  |  Nv ${this.levelSystem.level}  |  Abates ${this.kills}  |  ${formatDuration(this.survivalMs)}${resinBit}`,
     );
 
     this.waveHudBg.clear();
@@ -1632,6 +2153,10 @@ export class GameScene extends Phaser.Scene {
           const turretCount = this.countActiveTurrets();
           if (boss.bossId === 'boitata_gaze') {
             label = `${bossName}  ·  HP ${Math.ceil(boss.hp)}  ·  Torretas ${turretCount}`;
+          }
+          if (boss.bossId === 'shield_master') {
+            const shield = boss.reflecting ? '  ·  ESCUDO' : '';
+            label = `${bossName}  ·  HP ${Math.ceil(boss.hp)}  ·  Armadura ${Math.ceil(boss.armor)}${shield}  ·  Cavaleiros ${minions}`;
           }
           if (boss.triggered) {
             label = `TRIGGERED  ·  ${label}`;
@@ -1719,9 +2244,15 @@ export class GameScene extends Phaser.Scene {
         if (!this.player2.isDead()) {
           this.player2.updateMovement(this.remoteInput.move);
           this.player2.setAimAngle(this.remoteInput.aim);
+          this.player2.canShoot = this.remoteInput.firing && this.combatStarted;
+          this.weapon2?.setFireEnabled(this.player2.canShoot);
         }
       }
     }
+
+    this.updateStamina(delta);
+    this.updateResinMagnet();
+    this.updateShieldKnights(time, delta);
 
     if (!(this.online && this.onlineRole === 'guest')) {
       this.spawner?.update(delta);
@@ -1762,6 +2293,11 @@ export class GameScene extends Phaser.Scene {
         } else if (enemy.bossId === 'poisoner_master') {
           enemy.chase(target);
           this.updatePoisonerTrail(enemy, time);
+        } else if (enemy.bossId === 'shield_master') {
+          this.updateShieldMasterAI(enemy, time);
+          this.syncShieldVisual(enemy);
+          // chase só no idle; defend/charge controlam velocidade
+          if (this.shieldPhase === 'idle') enemy.chase(target);
         } else if (enemy.isBoss) {
           enemy.chase(target);
         } else {
@@ -1964,7 +2500,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private leaveOnlineToMenu(): void {
-    void this.onlineSession?.send({ type: 'soloContinue' });
+    void this.onlineSession?.send({
+      type: 'soloContinue',
+      fromPeerId: this.onlineSession.peerId,
+    });
     void this.onlineSession?.disconnect();
     if (this.onlineSession) void RoomService.close(this.onlineSession.roomCode);
     setActiveOnlineSession(null);
@@ -2042,10 +2581,15 @@ export class GameScene extends Phaser.Scene {
       .setDepth(150);
 
     this.unsubOnline = this.onlineSession.onMessage((msg) => {
+      const remoteId = this.onlineSession!.remotePeer?.peerId;
+
       if (msg.type === 'hello') {
+        // Lobby: aceita hello do peer oposto; rejeita role auto-declarado inconsistente com o nosso papel
+        if (msg.peer.peerId === this.onlineSession!.peerId) return;
+        if (this.onlineRole === 'host' && msg.peer.role === 'host') return;
+        if (this.onlineRole === 'guest' && msg.peer.role === 'guest') return;
         this.onlineSession!.remotePeer = msg.peer;
         if (this.nameTags[1]) this.nameTags[1].text.setText(msg.peer.displayName);
-        // Host responde com o próprio nome (convidado criava sala sem receber o hello do host)
         if (this.onlineRole === 'host') {
           void this.onlineSession!.send({
             type: 'hello',
@@ -2062,19 +2606,25 @@ export class GameScene extends Phaser.Scene {
         this.lobbyBanner?.setText(`Começa em ${msg.seconds}…`);
       }
       if (msg.type === 'start') {
-        this.beginOnlineCombat();
+        // Só o host inicia a partida
+        if (this.onlineRole === 'guest') this.beginOnlineCombat();
       }
       if (msg.type === 'input' && this.onlineRole === 'host' && this.player2) {
-        this.remoteInput = { move: msg.move, aim: msg.aim };
+        if (remoteId && msg.peerId !== remoteId) return;
+        this.remoteInput = { move: msg.move, aim: msg.aim, firing: msg.firing };
         this.player2.setAimAngle(msg.aim);
       }
       if (msg.type === 'peerLeft' || msg.type === 'soloContinue') {
+        if (msg.type === 'peerLeft' && remoteId && msg.peerId !== remoteId) return;
+        if (msg.type === 'soloContinue' && remoteId && msg.fromPeerId !== remoteId) return;
         this.convertToSoloAfterPeerLeft();
       }
       if (msg.type === 'choiceLock') {
+        if (remoteId && msg.peerId !== remoteId && msg.peerId !== this.onlineSession?.peerId) {
+          return;
+        }
         const localId = this.onlineSession?.peerId;
         if (msg.peerId !== localId && this.player2) {
-          // Morto não fica “protegido” (imortalidade fantasma no host)
           if (this.player2.isDead()) {
             this.player2.setChoiceProtected(false);
           } else {
@@ -2087,6 +2637,12 @@ export class GameScene extends Phaser.Scene {
         }
       }
       if (msg.type === 'reviveAlly') {
+        // Só o host autoriza revive (mensagem originada no host)
+        if (this.onlineRole === 'guest') {
+          if (remoteId && msg.fromPeerId !== remoteId) return;
+        } else if (msg.fromPeerId !== this.onlineSession?.peerId) {
+          return;
+        }
         const target =
           msg.targetPeerId === this.onlineSession?.peerId ? this.player1 : this.player2;
         if (target?.isDead()) {
@@ -2098,6 +2654,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
       if (msg.type === 'snapshot' && this.onlineRole === 'guest') {
+        if (remoteId && msg.fromPeerId !== remoteId) return;
         this.applyOnlineSnapshot(msg);
       }
     });
@@ -2144,7 +2701,7 @@ export class GameScene extends Phaser.Scene {
           this.lobbyBanner?.setText(`Começa em ${sec}…`);
           void this.onlineSession?.send({ type: 'countdown', seconds: sec });
         } else {
-          void this.onlineSession?.send({ type: 'start', seed: Date.now() });
+          void this.onlineSession?.send({ type: 'start' });
           this.beginOnlineCombat();
         }
       },
@@ -2203,7 +2760,19 @@ export class GameScene extends Phaser.Scene {
       xpPickupRadius?: number;
       xpGainBonus?: number;
     }>;
-    enemies: Array<{ id: number; x: number; y: number; type: string; hp: number; armor: number }>;
+    enemies: Array<{
+      id: number;
+      x: number;
+      y: number;
+      type: string;
+      hp: number;
+      maxHp: number;
+      armor: number;
+      isBoss?: boolean;
+      bossId?: string;
+      triggered?: boolean;
+    }>;
+    turrets?: Array<{ id: number; x: number; y: number; hp: number }>;
     kills: number;
     level: number;
     xpProgress?: number;
@@ -2242,7 +2811,7 @@ export class GameScene extends Phaser.Scene {
         player.stats.hp = Math.max(1, p.hp);
       }
     }
-    // Sync inimigos (thin client)
+    // Sync inimigos (thin client) — inclui bosses via bossId
     const seen = new Set<number>();
     for (const e of msg.enemies) {
       seen.add(e.id);
@@ -2250,14 +2819,21 @@ export class GameScene extends Phaser.Scene {
       if (!enemy) {
         enemy = this.enemies.get() as Enemy | null ?? undefined;
         if (!enemy) continue;
-        if (e.type in ENEMY_DEFS) {
+        if (e.isBoss && e.bossId && e.bossId in BOSS_DEFS) {
+          enemy.spawnBoss(e.x, e.y, BOSS_DEFS[e.bossId as BossId]);
+          enemy.netId = e.id;
+        } else if (e.type in ENEMY_DEFS) {
           enemy.spawn(e.x, e.y, e.type as EnemyType);
           enemy.netId = e.id;
+        } else {
+          continue;
         }
       }
       enemy.setPosition(e.x, e.y);
       enemy.hp = e.hp;
+      if (e.maxHp) enemy.maxHp = e.maxHp;
       enemy.armor = e.armor;
+      if (e.triggered) enemy.triggered = true;
       enemy.setActive(true);
       enemy.setVisible(true);
     }
@@ -2265,6 +2841,29 @@ export class GameScene extends Phaser.Scene {
       if (child.active && !seen.has(child.netId)) {
         child.setActive(false);
         child.setVisible(false);
+      }
+    }
+
+    if (msg.turrets && this.turrets) {
+      const seenT = new Set<number>();
+      for (const t of msg.turrets) {
+        seenT.add(t.id);
+        let turret = (this.turrets.getChildren() as BossTurret[]).find((c) => c.netId === t.id);
+        if (!turret) {
+          turret = this.turrets.get() as BossTurret | null ?? undefined;
+          if (!turret) continue;
+          turret.spawn(t.x, t.y, 0);
+          turret.netId = t.id;
+        }
+        turret.setPosition(t.x, t.y);
+        turret.hp = t.hp;
+        turret.setActive(true);
+        turret.setVisible(true);
+      }
+      for (const child of this.turrets.getChildren() as BossTurret[]) {
+        if (child.active && !seenT.has(child.netId)) {
+          child.deactivate();
+        }
       }
     }
   }
@@ -2304,13 +2903,23 @@ export class GameScene extends Phaser.Scene {
         y: e.y,
         type: String(e.enemyType),
         hp: e.hp,
+        maxHp: e.maxHp,
         armor: e.armor,
+        isBoss: e.isBoss || undefined,
+        bossId: e.bossId,
+        triggered: e.triggered || undefined,
       }));
+    const turrets = (this.turrets.getChildren() as BossTurret[])
+      .filter((t) => t.active)
+      .slice(0, 24)
+      .map((t) => ({ id: t.netId, x: t.x, y: t.y, hp: t.hp }));
     void this.onlineSession.send({
       type: 'snapshot',
       t: time,
+      fromPeerId: this.onlineSession.peerId,
       players,
       enemies,
+      turrets,
       kills: this.kills,
       level: this.levelSystem.level,
       xpProgress: this.levelSystem.progress(),

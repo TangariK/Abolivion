@@ -73,9 +73,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return Math.max(400, Math.floor(base * this.debuffDurationMul));
   }
 
+  /** Multiplicador temporário (corrida / effects). */
+  moveSpeedMul = 1;
+
   /** Velocidade efetiva com Letargia / Tontura. */
   effectiveSpeed(now: number): number {
-    let mul = 1;
+    let mul = this.moveSpeedMul;
     if (this.isDizzy(now)) mul *= DIZZY_SPEED_MUL;
     else if (this.isLethargic(now)) mul *= LETHARGY_SPEED_MUL;
     return this.stats.speed * mul;
